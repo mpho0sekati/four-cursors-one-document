@@ -1,29 +1,59 @@
-# Welcome to your Lovable project
+# AI Staffroom
 
-This project was built with [Lovable](https://lovable.dev).
+A frontend demonstration of a swarm-style document workspace for teachers. Four simulated AI colleagues — **Planner**, **Writer**, **Reviewer** and **Corrector** — appear as animated cursors that move to real fields on an A4 page and build a lesson plan, progress report or mark register live.
 
-## Build with Lovable
+> All colleagues are simulated in the browser. No real AI backend is called. Sample school, teacher and learner data is fictional.
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+## Features
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Three-panel layout:** Mission Desk (inputs), Living Document (A4 canvas), Agent Control Panel (status, log, controls).
+- **Four animated cursors** with spring motion, velocity tilt and tool badges (crosshair, I-beam, scanner, correction wand).
+- **Real document state:** progressive typing, table rows inserted one by one, statuses (editing → checking → warning → corrected → approved).
+- **Genuine validation:** the Reviewer runs real checks (e.g. activity minutes vs. lesson duration, mark totals, level scales) and the Corrector applies justified fixes.
+- **Blueprint previews**, alignment guides and a completion regroup animation around the document seal.
+- **Procedural sound** (Web Audio, no audio files) with a mute toggle.
+- **Controls:** Start, Pause/Resume, Replay, Reset, speed 1×/2×/3×. The Lesson Plan demo auto-starts on load.
 
-## Development
+## Demonstration missions
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+| Mission | What the Reviewer catches |
+| --- | --- |
+| Lesson plan | Activity minutes don't add up to the lesson duration |
+| Mark register | Recorded totals that differ from calculated totals (proposed for teacher approval) |
+| Progress report | Achievement levels outside the 1–7 scale |
+
+## Getting started
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+npm install
+npm run dev     # http://localhost:8080
+npm test        # vitest
+npm run build
 ```
 
-## Built with
+Stack: TanStack Start v1, React 19, Vite 7, Tailwind CSS v4, TypeScript.
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+## Project structure
+
+```text
+src/
+  routes/index.tsx            Page shell, three panels, auto-start
+  components/staffroom/
+    MissionDesk.tsx           Mission inputs form
+    DocumentCanvas.tsx        A4 living document (fields carry data-field-id)
+    AgentActivityPanel.tsx    Agent cards, event log, controls
+    CursorLayer.tsx           Overlay hosting the four cursors
+    AgentCursor.tsx           Spring/tilt cursor + tool badges
+    Blueprint.tsx             Wireframe preview while Planner creates a section
+  staffroom/
+    types.ts                  AgentEvent / Task / Field contracts
+    missions.ts               Builds the task list for each mission type
+    TaskScheduler.ts          Dependencies + per-field locking
+    SimulationController.ts   Runs tasks, emits AgentEvents
+    DocumentStore.ts          Reducer: the only place document state changes
+    validation.ts(+ .test.ts) Checks used by the Reviewer
+    sound.ts                  Web Audio effects subscribed to events
+    agents.ts                 Agent names, roles, colours
+```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the engine works and how to plug in a real agent backend.
