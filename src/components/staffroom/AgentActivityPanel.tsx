@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw } from "lucide-react";
+import { Eraser, Pause, Play, RotateCcw } from "lucide-react";
 import { useStaffroom } from "@/staffroom/DocumentStore";
 import { AGENTS, AGENT_IDS } from "@/staffroom/agents";
 import { simulation } from "@/staffroom/SimulationController";
@@ -11,6 +11,7 @@ export function AgentActivityPanel() {
   const c = useStaffroom((s) => s.control);
   const log = useStaffroom((s) => s.log);
   const started = useStaffroom((s) => s.input !== null);
+  const canReplay = started || simulation.lastInput !== null;
   const entries = log.filter((e) => e.status === "completed" && e.summary).slice(-40).reverse();
   const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
 
@@ -22,8 +23,11 @@ export function AgentActivityPanel() {
           <button disabled={!c.running} onClick={() => (c.paused ? simulation.resume() : simulation.pause())} className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-40">
             {c.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{c.paused ? "Resume" : "Pause"}
           </button>
-          <button disabled={!started} onClick={() => simulation.restart()} className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-40">
+          <button disabled={!canReplay} onClick={() => simulation.restart()} title="Run this mission again from the beginning" className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-40">
             <RotateCcw className="h-3.5 w-3.5" />Replay
+          </button>
+          <button disabled={!started} onClick={() => simulation.reset()} title="Stop and clear the document" className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-40">
+            <Eraser className="h-3.5 w-3.5" />Reset
           </button>
           <div className="ml-auto flex overflow-hidden rounded-md border">
             {([1, 2, 3] as const).map((s) => (

@@ -31,6 +31,15 @@ export class SimulationController {
     this.syncControl({ running: true, complete: false, regroup: false });
     void this.loop(tok);
   }
+  /** Stop everything and return to a blank page; Replay still remembers the last mission. */
+  reset() {
+    this.token++;
+    this.scheduler.load([]);
+    AGENT_IDS.forEach((a) => (this.busy[a] = false));
+    this.paused = false;
+    staffroom.reset(initialState());
+    this.syncControl({ running: false, complete: false, regroup: false });
+  }
   restart() { if (this.lastInput) this.start(this.lastInput); }
   pause() { this.paused = true; this.syncControl({}); }
   resume() { this.paused = false; this.syncControl({}); }
