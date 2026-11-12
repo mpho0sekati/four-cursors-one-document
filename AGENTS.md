@@ -32,3 +32,4 @@ use the editor.
 ## Project rules
 - AI Staffroom engine lives in `src/staffroom/`: missions produce Tasks, SimulationController executes them and emits `AgentEvent`s, and the DocumentStore reducer is the only thing that changes document state — keeps the producer swappable for a real agent backend.
 - Cursors locate targets via `data-field-id` (rows use `fieldId::n`) and re-measure every frame — never hardcode coordinates.
+- Sound effects are synthesised in `src/staffroom/sound.ts` and subscribe via `staffroom.onEvent`; never add audio files or trigger sounds from components.

@@ -172,6 +172,13 @@
   }
 }
 
+@utility blueprint-grid {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--planner) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--planner) 18%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
 @utility caret-blink {
   animation: caret-blink 1s steps(1) infinite;
 }

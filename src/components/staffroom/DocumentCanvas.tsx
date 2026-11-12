@@ -142,13 +142,14 @@ export function DocumentCanvas() {
               <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight">{s.title}</h1>
               <div className="mt-1 text-sm text-muted-foreground">{s.input.subject} · Grade {s.input.grade} · {s.input.topic}</div>
             </div>
-            <span className={cn("rounded border-2 px-3 py-1 font-display text-xs font-extrabold uppercase tracking-[0.2em]",
+            <motion.span key={s.status} data-field-id="doc-seal" initial={{ scale: 1.25, rotate: -6 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 260, damping: 14 }} className={cn("rounded border-2 px-3 py-1 font-display text-xs font-extrabold uppercase tracking-[0.2em]",
               s.status === "approved" ? "border-writer text-writer" : s.status === "provisional" ? "border-corrector text-corrector" : "border-muted-foreground text-muted-foreground")}>
               {stamp}
-            </span>
+            </motion.span>
           </div>
           <div className="space-y-4">
             {s.order.map((id) => <FieldBlock key={id} f={s.fields[id]!} duration={s.input?.type === "lesson" ? s.input.duration : undefined} />)}
+            <div data-doc-end className="h-0" />
           </div>
           <footer className="mt-10 border-t pt-3 text-[10px] text-muted-foreground">
             {stamp} document · Prepared with AI Staffroom (frontend demonstration — simulated agents, deterministic local checks). Verify before official use.

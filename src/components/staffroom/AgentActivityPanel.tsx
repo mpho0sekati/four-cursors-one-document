@@ -19,7 +19,7 @@ export function AgentActivityPanel() {
     <aside className="no-print flex h-full flex-col border-l bg-card">
       <div className="border-b px-4 py-4">
         <div className="font-display text-sm font-bold uppercase tracking-[0.14em]">Agent Control</div>
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button disabled={!c.running} onClick={() => (c.paused ? simulation.resume() : simulation.pause())} className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-40">
             {c.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{c.paused ? "Resume" : "Pause"}
           </button>

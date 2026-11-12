@@ -114,16 +114,23 @@ export class SimulationController {
 
   private async exec(t: Task, tok: number) {
     const p = t.payload;
+    if (t.action === "create_section") {
+      // Planner drags out a wireframe box, then the real section replaces it.
+      this.emit(t, "create_section", "running", { field: p.field, bubble: "Drafting layout" });
+      this.emit(t, "navigate_to_field", "running", { bubble: "Drafting layout" }, undefined, "__blueprint");
+      await this.sleep(1300, tok);
+      this.emit(t, "focus_field", "running", {}, undefined, "__blueprint");
+      await this.sleep(200, tok);
+      this.emit(t, "create_section", "completed", { field: p.field }, `Created “${p.field.label}”`);
+      await this.sleep(t.duration + 180, tok);
+      return;
+    }
     this.emit(t, "navigate_to_field", "running", { bubble: p.bubble ?? t.label });
     await this.sleep(700, tok);
     this.emit(t, "focus_field", "running");
     await this.sleep(260, tok);
 
     switch (t.action) {
-      case "create_section":
-        this.emit(t, "create_section", "completed", { field: p.field }, `Created “${p.field.label}”`);
-        await this.sleep(t.duration, tok);
-        break;
       case "type_text": {
         const text: string = p.textFn ? p.textFn(staffroom.get()) : p.text;
         const step = 2;

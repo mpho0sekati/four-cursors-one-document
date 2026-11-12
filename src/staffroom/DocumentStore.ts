@@ -13,16 +13,18 @@ export interface StaffroomState {
   agents: Record<AgentId, AgentState>;
   log: AgentEvent[];
   control: Control;
+  /** Wireframe preview while the Planner drags out a new section. */
+  blueprint: { label: string; kind: Field["kind"] } | null;
 }
 
 const freshAgents = () =>
   Object.fromEntries(
-    AGENT_IDS.map((id) => [id, { id, target: null, status: "idle", bubble: "", currentTask: "Standing by", completed: 0, actions: [], clicks: 0, typing: false } satisfies AgentState]),
+    AGENT_IDS.map((id) => [id, { id, target: null, status: "idle", bubble: "", currentTask: "Standing by", completed: 0, actions: [], clicks: 0, typing: false, action: null } satisfies AgentState]),
   ) as unknown as Record<AgentId, AgentState>;
 
 export function initialState(input: MissionInput | null = null, title = ""): StaffroomState {
   return {
-    input, title, status: "empty", order: [], fields: {}, agents: freshAgents(), log: [],
+    input, title, status: "empty", order: [], fields: {}, agents: freshAgents(), log: [], blueprint: null,
     control: { running: false, paused: false, speed: 1, complete: false, regroup: false, done: 0, total: 0 },
   };
 }
@@ -51,6 +53,7 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
   if (a && actor) {
     st.agents[actor] = a;
     if (p.label) a.currentTask = p.label;
+    if (e.action !== "navigate_to_field") a.action = done ? null : e.action;
     if (done && e.summary) { a.completed++; a.actions = [e.summary, ...a.actions].slice(0, 4); }
   }
 
@@ -64,6 +67,8 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
       break;
     case "create_section": {
       const nf = p.field as Field;
+      if (!done) { st.blueprint = { label: nf.label, kind: nf.kind }; break; }
+      st.blueprint = null;
       if (!st.fields[nf.id]) { st.fields[nf.id] = { ...nf }; st.order = [...st.order, nf.id]; }
       if (st.status === "empty") st.status = "draft";
       break;
@@ -131,6 +136,8 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
 }
 
 type Listener = () => void;
+type EventListener = (e: AgentEvent) => void;
+const eventListeners = new Set<EventListener>();
 let state = initialState();
 const listeners = new Set<Listener>();
 const notify = () => listeners.forEach((l) => l());
@@ -138,7 +145,9 @@ const notify = () => listeners.forEach((l) => l());
 export const staffroom = {
   get: () => state,
   subscribe(l: Listener) { listeners.add(l); return () => { listeners.delete(l); }; },
-  dispatch(e: AgentEvent) { state = applyEvent(state, e); notify(); },
+  dispatch(e: AgentEvent) { state = applyEvent(state, e); notify(); eventListeners.forEach((l) => l(e)); },
+  /** Side-effect subscribers (e.g. sound) that react to individual events. */
+  onEvent(l: EventListener) { eventListeners.add(l); return () => { eventListeners.delete(l); }; },
   patch(fn: (s: StaffroomState) => StaffroomState) { state = fn(state); notify(); },
   reset(next: StaffroomState) { state = next; notify(); },
 };

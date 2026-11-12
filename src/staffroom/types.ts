@@ -96,6 +96,8 @@ export interface AgentState {
   actions: string[];
   clicks: number;
   typing: boolean;
+  /** Action currently being performed; drives the cursor tool mode. */
+  action: ActionType | null;
 }
 
 export interface CheckResult { ok: boolean; issue?: string | undefined; fix?: Payload | undefined; summary?: string | undefined }
