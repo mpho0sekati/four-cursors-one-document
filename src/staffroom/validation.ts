@@ -18,10 +18,10 @@ export function rebalanceMinutes(mins: number[], target: number, min = 3): numbe
   let diff = target - sum(out);
   const order = raw.map((r, i) => [r - Math.floor(r), i] as const).sort((a, b) => b[0] - a[0]).map((x) => x[1]);
   let k = 0;
-  while (diff > 0) { out[order[k % order.length]]++; diff--; k++; }
+  while (diff > 0) { out[order[k % order.length]!]!++; diff--; k++; }
   while (diff < 0) {
     const i = out.indexOf(Math.max(...out));
-    out[i]--; diff++;
+    out[i]!--; diff++;
   }
   return out;
 }

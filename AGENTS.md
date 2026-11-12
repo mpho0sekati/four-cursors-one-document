@@ -28,3 +28,7 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- AI Staffroom engine lives in `src/staffroom/`: missions produce Tasks, SimulationController executes them and emits `AgentEvent`s, and the DocumentStore reducer is the only thing that changes document state — keeps the producer swappable for a real agent backend.
+- Cursors locate targets via `data-field-id` (rows use `fieldId::n`) and re-measure every frame — never hardcode coordinates.

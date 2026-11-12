@@ -18,7 +18,7 @@ export type ActionType =
   | "generate_document";
 
 export type EventStatus = "running" | "progress" | "completed" | "failed";
-export type Payload = Record<string, any>;
+export type Payload = any;
 
 export interface AgentEvent {
   id: string;
@@ -27,8 +27,8 @@ export interface AgentEvent {
   targetId: string;
   payload: Payload;
   status: EventStatus;
-  taskId?: string;
-  summary?: string;
+  taskId?: string | undefined;
+  summary?: string | undefined;
   at: number;
 }
 
@@ -43,14 +43,19 @@ export interface Task {
   payload: Payload;
   label: string;
   /** Waits until every non-afterAll task has finished. */
-  afterAll?: boolean;
+  afterAll?: boolean | undefined;
 }
 
 export type FieldStatus = "empty" | "editing" | "checking" | "complete" | "warning" | "corrected" | "approved";
 export type RowStatus = "new" | "checking" | "ok" | "warning" | "corrected" | "proposed" | "missing" | "approved";
 
-export interface Column { key: string; label: string; align?: "right" | "center" }
-export interface Row { id: string; cells: Record<string, string>; status: RowStatus; note?: string }
+export interface Column { key: string; label: string; align?: "right" | "center" | undefined }
+export interface Cells {
+  k?: string; v?: string; name?: string; phase?: string; activity?: string; minutes?: string; group?: string;
+  pct?: string; level?: string; comment?: string; recorded?: string; calculated?: string; proposed?: string;
+  [key: string]: string | undefined;
+}
+export interface Row { id: string; cells: Cells; status: RowStatus; note?: string | undefined; prev?: RowStatus | undefined }
 
 export interface Field {
   id: string;
@@ -61,9 +66,9 @@ export interface Field {
   rows: Row[];
   columns: Column[];
   issues: string[];
-  note?: string;
+  note?: string | undefined;
   activeAgent: AgentId | null;
-  placeholder?: string;
+  placeholder?: string | undefined;
 }
 
 export type DocStatus = "empty" | "draft" | "provisional" | "approved";
@@ -93,4 +98,4 @@ export interface AgentState {
   typing: boolean;
 }
 
-export interface CheckResult { ok: boolean; issue?: string; fix?: Payload; summary?: string }
+export interface CheckResult { ok: boolean; issue?: string | undefined; fix?: Payload | undefined; summary?: string | undefined }

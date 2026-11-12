@@ -18,7 +18,7 @@ export interface StaffroomState {
 const freshAgents = () =>
   Object.fromEntries(
     AGENT_IDS.map((id) => [id, { id, target: null, status: "idle", bubble: "", currentTask: "Standing by", completed: 0, actions: [], clicks: 0, typing: false } satisfies AgentState]),
-  ) as Record<AgentId, AgentState>;
+  ) as unknown as Record<AgentId, AgentState>;
 
 export function initialState(input: MissionInput | null = null, title = ""): StaffroomState {
   return {
@@ -28,7 +28,7 @@ export function initialState(input: MissionInput | null = null, title = ""): Sta
 }
 
 export const splitTarget = (t: string) => {
-  const [fieldId, row] = t.split("::");
+  const [fieldId = "", row] = t.split("::");
   return { fieldId, rowId: row ? t : null };
 };
 
@@ -44,7 +44,8 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
   const done = e.status === "completed";
   const { fieldId, rowId } = splitTarget(e.targetId);
   let f: Field | null = null;
-  if (st.fields[fieldId]) { f = { ...st.fields[fieldId] }; st.fields[fieldId] = f; }
+  const cur = st.fields[fieldId];
+  if (cur) { f = { ...cur }; st.fields[fieldId] = f; }
   const actor = e.agentId === "teacher" ? null : e.agentId;
   const a = actor ? { ...st.agents[actor] } : null;
   if (a && actor) {
@@ -83,7 +84,7 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
       break;
     case "validate_field":
       if (f && !done) {
-        if (rowId) patchRow(f, rowId, (r) => ({ ...r, status: "checking" }));
+        if (rowId) patchRow(f, rowId, (r) => ({ ...r, prev: r.status === "checking" ? r.prev : r.status, status: "checking" }));
         else f.status = "checking";
       }
       break;
@@ -108,13 +109,13 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
     case "approve_field":
       if (e.agentId === "teacher") {
         for (const id of st.order) {
-          const ff = { ...st.fields[id] };
-          ff.rows = ff.rows.map((r) => r.status === "proposed" ? { ...r, cells: { ...r.cells, recorded: r.cells.proposed, proposed: "" }, status: "approved", note: "Correction approved by teacher" } : r);
+          const ff = { ...st.fields[id]! };
+          ff.rows = ff.rows.map((r): Row => r.status === "proposed" ? { ...r, cells: { ...r.cells, recorded: r.cells.proposed ?? "", proposed: "" }, status: "approved" as const, note: "Correction approved by teacher" } : r);
           st.fields[id] = ff;
         }
         st.status = p.status;
       } else if (f) {
-        if (rowId) patchRow(f, rowId, (r) => ({ ...r, status: p.keepStatus ? r.status : "ok", note: p.note ?? r.note }));
+        if (rowId) patchRow(f, rowId, (r) => ({ ...r, status: p.keepStatus ? (r.prev ?? r.status) : "ok", note: p.note ?? r.note }));
         else { f.status = "approved"; f.issues = []; }
       }
       break;

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { StaffroomState } from "./DocumentStore";
-import type { AgentId, CheckResult, Column, Field, MissionInput, Payload, Row, Task } from "./types";
+import type { AgentId, Cells, CheckResult, Column, Field, MissionInput, Payload, Row, Task } from "./types";
 import { checkLessonDuration, computeTotal, draftLevel, levelFromPercent, parseMarks, rebalanceMinutes } from "./validation";
 
 export const EXAMPLES: Record<MissionInput["type"], MissionInput> = {
@@ -32,7 +32,7 @@ const field = (id: string, label: string, kind: Field["kind"], columns: Column[]
   id, label, kind, columns, status: "empty", text: "", rows: [], issues: [], activeAgent: null, placeholder,
 });
 const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
-const learnerNames = (s: string) => lines(s).filter((l) => !/^max\s*\|/i.test(l)).map((l) => l.split("|")[0].trim());
+const learnerNames = (s: string) => lines(s).filter((l) => !/^max\s*\|/i.test(l)).map((l) => (l.split("|")[0] ?? "").trim());
 
 function headerTask(fid: string, i: MissionInput, extra: [string, string][], deps: string[]) {
   const kv: [string, string][] = [["Teacher", i.teacher], ["School", i.school], ["Grade", i.grade], ["Subject", i.subject], ["Topic", i.topic], ...extra];
@@ -41,7 +41,7 @@ function headerTask(fid: string, i: MissionInput, extra: [string, string][], dep
   });
 }
 const headerCheck = (fid: string) => (s: StaffroomState): CheckResult => {
-  const empty = s.fields[fid].rows.filter((r) => !r.cells.v?.trim()).map((r) => r.cells.k);
+  const empty = s.fields[fid]!.rows.filter((r) => !r.cells.v?.trim()).map((r) => r.cells.k);
   return empty.length ? { ok: false, issue: `Missing: ${empty.join(", ")}` } : { ok: true, summary: "Details complete" };
 };
 
@@ -66,7 +66,7 @@ function lessonMission(i: MissionInput) {
   };
   const order = Object.values(p);
   const creates = order.map((f, k) => T("planner", "create_section", f.id, `Creating “${f.label}”`, { id: `p-${f.id}`, duration: 150, payload: { field: f, bubble: "New section" } }));
-  creates.forEach((c, k) => k && c.deps.push(creates[k - 1].id));
+  creates.forEach((c, k) => k && c.deps.push(creates[k - 1]!.id));
 
   const objText = `By the end of this ${i.duration}-minute lesson, Grade ${i.grade} learners will:\n• Explain ${topic.toLowerCase()} using concrete objects and a number line.\n• ${maths ? "Solve two-digit addition and subtraction problems without regrouping." : `Apply key ideas of ${topic.toLowerCase()} in a short task.`}\n• Describe their strategy to a partner using correct vocabulary.`;
   const asmText = maths
@@ -76,21 +76,21 @@ function lessonMission(i: MissionInput) {
   const groups = ["A", "B", "C"];
   const notesText = `• Timing: the plan must fit exactly ${i.duration} minutes.\n• Resources: counters, number lines, mini whiteboards, shopping-corner cards.\n• Support: pair learners who need help with a confident partner.${i.instructions ? `\n• Teacher request: ${i.instructions}` : ""}`;
 
-  const w1 = headerTask(p.header.id, i, [["Duration", `${i.duration} minutes`]], [creates[0].id]);
-  const w2 = T("writer", "type_text", p.obj.id, "Writing objectives", { deps: [creates[1].id, w1.id], payload: { text: objText, what: "objectives" } });
+  const w1 = headerTask(p.header.id, i, [["Duration", `${i.duration} minutes`]], [creates[0]!.id]);
+  const w2 = T("writer", "type_text", p.obj.id, "Writing objectives", { deps: [creates[1]!.id, w1.id], payload: { text: objText, what: "objectives" } });
   const w3 = T("writer", "populate_table", p.act.id, "Drafting activities", {
-    deps: [creates[2].id, w2.id],
+    deps: [creates[2]!.id, w2.id],
     payload: { bubble: "Activities", rows: DRAFT_ACTIVITIES.map(([phase, a, m], k) => ({ id: `${p.act.id}::${k}`, cells: { phase, activity: a.replace("{topic}", topic.toLowerCase()), minutes: String(m) }, status: "new" })) },
   });
-  const w4 = T("writer", "type_text", p.asmt.id, "Writing assessment", { deps: [creates[3].id, w3.id], payload: { text: asmText, what: "assessment questions" } });
-  const w5 = T("writer", "type_text", p.notes.id, "Writing teacher notes", { deps: [creates[5].id, w4.id], payload: { text: notesText, what: "teacher notes" } });
+  const w4 = T("writer", "type_text", p.asmt.id, "Writing assessment", { deps: [creates[3]!.id, w3.id], payload: { text: asmText, what: "assessment questions" } });
+  const w5 = T("writer", "type_text", p.notes.id, "Writing teacher notes", { deps: [creates[5]!.id, w4.id], payload: { text: notesText, what: "teacher notes" } });
   const p7 = T("planner", "populate_table", p.learn.id, "Grouping learners", {
-    deps: [creates[5].id],
+    deps: [creates[5]!.id],
     payload: { bubble: "Groups", rows: names.map((name, k) => ({ id: `${p.learn.id}::${k}`, cells: { name, group: `Group ${groups[k % 3]}` }, status: "new" })) },
   });
 
   const durationCheck = (s: StaffroomState): CheckResult => {
-    const rows = s.fields[p.act.id].rows;
+    const rows = s.fields[p.act.id]!.rows;
     const mins = rows.map((r) => Number(r.cells.minutes) || 0);
     const r = checkLessonDuration(mins, i.duration);
     if (r.ok) return { ok: true, summary: `Timings total ${r.total} of ${i.duration} min` };
@@ -125,7 +125,7 @@ function lessonMission(i: MissionInput) {
     });
 
   const textCheck = (fid: string, min: number, what: string) => (s: StaffroomState): CheckResult => {
-    const c = lines(s.fields[fid].text).length;
+    const c = lines(s.fields[fid]!.text).length;
     return c >= min ? { ok: true, summary: `${what}: ${c} items` } : { ok: false, issue: `${what} needs at least ${min} items (has ${c})` };
   };
   const reviews = [
@@ -135,7 +135,7 @@ function lessonMission(i: MissionInput) {
     T("reviewer", "validate_field", p.asmt.id, "Checking assessment", { deps: [w4.id], duration: 600, payload: { check: textCheck(p.asmt.id, 3, "Questions") } }),
     T("reviewer", "validate_field", p.learn.id, "Checking learner list", {
       deps: [p7.id], duration: 500,
-      payload: { check: (s: StaffroomState): CheckResult => s.fields[p.learn.id].rows.length ? { ok: true, summary: `${s.fields[p.learn.id].rows.length} learners grouped` } : { ok: false, issue: "No learners listed" } },
+      payload: { check: (s: StaffroomState): CheckResult => s.fields[p.learn.id]!.rows.length ? { ok: true, summary: `${s.fields[p.learn.id]!.rows.length} learners grouped` } : { ok: false, issue: "No learners listed" } },
     }),
     T("reviewer", "validate_field", p.notes.id, "Checking notes", { deps: [w5.id], duration: 500, payload: { check: textCheck(p.notes.id, 2, "Notes") } }),
   ];
@@ -160,11 +160,11 @@ function reportMission(i: MissionInput) {
   const table = field("learner-table", "Learner progress", "table", [{ key: "name", label: "Learner" }, { key: "pct", label: "%", align: "right" }, { key: "level", label: "Level", align: "center" }, { key: "comment", label: "Comment" }]);
   const summary = field("report-summary", "Class summary", "text");
   const creates = [header, table, summary].map((f) => T("planner", "create_section", f.id, `Creating “${f.label}”`, { duration: 150, payload: { field: f } }));
-  creates.forEach((c, k) => k && c.deps.push(creates[k - 1].id));
-  const w1 = headerTask(header.id, i, [["Scale", "CAPS levels 1–7"]], [creates[0].id]);
+  creates.forEach((c, k) => k && c.deps.push(creates[k - 1]!.id));
+  const w1 = headerTask(header.id, i, [["Scale", "CAPS levels 1–7"]], [creates[0]!.id]);
   const people = lines(i.learners).map((l) => { const [name, pct] = l.split("|").map((x) => x.trim()); return { name, pct: Number(pct) }; });
   const tasks: Task[] = [];
-  let prev = creates[1].id;
+  let prev = creates[1]!.id;
   people.forEach((pp, k) => {
     const rid = `${table.id}::${k}`;
     const lvl = Number.isFinite(pp.pct) ? draftLevel(pp.pct) : NaN;
@@ -174,7 +174,7 @@ function reportMission(i: MissionInput) {
     });
     prev = w.id;
     const check = (s: StaffroomState): CheckResult => {
-      const row = s.fields[table.id].rows.find((r) => r.id === rid)!;
+      const row = s.fields[table.id]!.rows.find((r) => r.id === rid)!;
       if (row.cells.pct === "") return { ok: false, issue: `${pp.name}: no percentage supplied — not invented` };
       const want = levelFromPercent(Number(row.cells.pct));
       const got = Number(row.cells.level);
@@ -202,9 +202,9 @@ function reportMission(i: MissionInput) {
     payload: {
       what: "class summary",
       textFn: (s: StaffroomState) => {
-        const rows = s.fields[table.id].rows.filter((r) => r.cells.pct !== "");
+        const rows = s.fields[table.id]!.rows.filter((r) => r.cells.pct !== "");
         const avg = rows.length ? Math.round(rows.reduce((a, r) => a + Number(r.cells.pct), 0) / rows.length) : 0;
-        const fixed = s.fields[table.id].rows.filter((r) => r.status === "corrected").length;
+        const fixed = s.fields[table.id]!.rows.filter((r) => r.status === "corrected").length;
         return `${rows.length} learners assessed. Class average: ${avg}% (level ${levelFromPercent(avg)}).\n${fixed} level${fixed === 1 ? "" : "s"} corrected after review against the CAPS scale.${i.instructions ? `\nNote: ${i.instructions}` : ""}`;
       },
     },
@@ -229,16 +229,16 @@ function registerMission(i: MissionInput) {
   const sheet = field("marksheet", "Marksheet", "table", [{ key: "name", label: "Learner" }, ...qCols, { key: "recorded", label: "Recorded", align: "right" }, { key: "calculated", label: "Calculated", align: "right" }]);
   const summary = field("register-summary", "Moderation summary", "text");
   const creates = [header, sheet, summary].map((f) => T("planner", "create_section", f.id, `Creating “${f.label}”`, { duration: 150, payload: { field: f } }));
-  creates.forEach((c, k) => k && c.deps.push(creates[k - 1].id));
-  const w1 = headerTask(header.id, i, [["Total marks", maxTotal != null ? String(maxTotal) : "Not given"]], [creates[0].id]);
+  creates.forEach((c, k) => k && c.deps.push(creates[k - 1]!.id));
+  const w1 = headerTask(header.id, i, [["Total marks", maxTotal != null ? String(maxTotal) : "Not given"]], [creates[0]!.id]);
   const tasks: Task[] = [];
-  let prev = creates[1].id;
+  let prev = creates[1]!.id;
   rowsIn.forEach((rin, k) => {
     const rid = `${sheet.id}::${k}`;
-    const cells: Record<string, string> = { name: rin.name, recorded: rin.recorded, calculated: "" };
+    const cells: Cells = { name: rin.name ?? "", recorded: rin.recorded, calculated: "" };
     qCols.forEach((c, q) => (cells[c.key] = rin.marks[q] == null ? "" : String(rin.marks[q])));
     const add = T("writer", "populate_table", rid, `Entering marks: ${rin.name}`, { deps: [prev], duration: 500, payload: { what: `Entered ${rin.name}`, row: { id: rid, status: "new", cells } as Row } });
-    const marksOf = (s: StaffroomState) => { const row = s.fields[sheet.id].rows.find((r) => r.id === rid)!; return { row, marks: qCols.map((c) => (row.cells[c.key] === "" ? null : Number(row.cells[c.key]))) }; };
+    const marksOf = (s: StaffroomState) => { const row = s.fields[sheet.id]!.rows.find((r) => r.id === rid)!; return { row, marks: qCols.map((c) => (row.cells[c.key] === "" ? null : Number(row.cells[c.key]))) }; };
     const calc = T("writer", "populate_table", rid, `Totalling ${rin.name}`, {
       deps: [add.id], duration: 350,
       payload: { what: `Totalled ${rin.name}`, patchFn: (s: StaffroomState) => { const t = computeTotal(marksOf(s).marks); return { calculated: t == null ? "—" : String(t) }; } },
@@ -276,7 +276,7 @@ function registerMission(i: MissionInput) {
     payload: {
       what: "moderation summary",
       textFn: (s: StaffroomState) => {
-        const rows = s.fields[sheet.id].rows;
+        const rows = s.fields[sheet.id]!.rows;
         const totals = rows.map((r) => Number(r.cells.calculated)).filter((x) => Number.isFinite(x));
         const avg = totals.length ? (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(1) : "—";
         return `${rows.length} learners captured. ${rows.filter((r) => r.status === "ok").length} totals verified.\n${rows.filter((r) => r.status === "proposed").length} corrected total(s) proposed — teacher approval required.\n${rows.filter((r) => r.status === "missing").length} learner(s) with missing marks — left blank, not estimated.\nAverage of complete totals: ${avg}${maxTotal != null ? ` / ${maxTotal}` : ""}.`;
