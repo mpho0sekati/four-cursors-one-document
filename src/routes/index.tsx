@@ -7,7 +7,8 @@ import { CursorLayer } from "@/components/staffroom/CursorLayer";
 import { DocumentCanvas } from "@/components/staffroom/DocumentCanvas";
 import { MissionDesk } from "@/components/staffroom/MissionDesk";
 import { staffroom, useStaffroom } from "@/staffroom/DocumentStore";
-import { registerCsv } from "@/staffroom/missions";
+import { EXAMPLES, registerCsv } from "@/staffroom/missions";
+import { simulation } from "@/staffroom/SimulationController";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -72,6 +73,10 @@ function Toolbar() {
 
 function Index() {
   const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => { if (!staffroom.get().input) simulation.start(EXAMPLES.lesson); }, 600);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <div className="print-root grid h-screen grid-cols-[300px_1fr_340px] overflow-hidden bg-background font-sans">
       <MissionDesk />
