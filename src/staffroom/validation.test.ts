@@ -27,3 +27,16 @@ describe("achievement levels", () => {
     expect(draftLevel(92)).toBe(8);
   });
 });
+
+import { pairLearners as pl } from "./validation";
+describe("pairLearners", () => {
+  it("pairs the highest scorer with the lowest", () => {
+    const r = pl([{ name: "A", score: 40 }, { name: "B", score: 90 }, { name: "C", score: 60 }, { name: "D", score: 75 }]);
+    expect(r.filter((x) => x.pair === 1).map((x) => x.name)).toEqual(["B", "A"]);
+    expect(r.filter((x) => x.pair === 2).map((x) => x.name)).toEqual(["D", "C"]);
+    expect(r.find((x) => x.name === "B")!.role).toBe("Peer tutor");
+  });
+  it("puts an odd learner into a trio", () => {
+    expect(pl([{ name: "A", score: 1 }, { name: "B", score: 2 }, { name: "C", score: 3 }]).filter((x) => x.pair === 1)).toHaveLength(3);
+  });
+});

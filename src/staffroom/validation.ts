@@ -56,3 +56,16 @@ export function parseMarks(s: string): (number | null)[] {
     return Number.isFinite(n) ? n : null;
   });
 }
+
+/** "Each one teach one": sort by score, pair strongest with weakest. An odd learner out joins the middle pair as a trio. */
+export function pairLearners(list: { name: string; score: number }[]): { name: string; score: number; pair: number; role: "Peer tutor" | "Learner" }[] {
+  const s = [...list].sort((a, b) => b.score - a.score);
+  const out: { name: string; score: number; pair: number; role: "Peer tutor" | "Learner" }[] = [];
+  const half = Math.floor(s.length / 2);
+  for (let k = 0; k < half; k++) {
+    out.push({ ...s[k]!, pair: k + 1, role: "Peer tutor" });
+    out.push({ ...s[s.length - 1 - k]!, pair: k + 1, role: "Learner" });
+  }
+  if (s.length % 2) out.push({ ...s[half]!, pair: Math.max(1, half), role: "Learner" });
+  return out;
+}

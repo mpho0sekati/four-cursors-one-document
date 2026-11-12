@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { StaffroomState } from "./DocumentStore";
 import type { AgentId, Cells, CheckResult, Column, Field, MissionInput, Payload, Row, Task } from "./types";
-import { checkLessonDuration, computeTotal, draftLevel, levelFromPercent, parseMarks, rebalanceMinutes } from "./validation";
+import { pairLearners, checkLessonDuration, computeTotal, draftLevel, levelFromPercent, parseMarks, rebalanceMinutes } from "./validation";
 
 export const EXAMPLES: Record<MissionInput["type"], MissionInput> = {
   lesson: {
     type: "lesson", teacher: "Ms Dlamini", school: "Sunrise Primary School", grade: "3", subject: "Mathematics",
     topic: "Addition and subtraction", duration: 40,
-    learners: "Amahle\nBokang\nChloe\nDumisani\nEsona\nFikile",
+    learners: "Amahle | 88\nBokang | 45\nChloe | 72\nDumisani | 38\nEsona | 64\nFikile | 91",
     instructions: "Prepare a mathematics lesson plan with practical activities, learning objectives, assessment questions and teacher notes.",
   },
   report: {
@@ -32,7 +32,6 @@ const field = (id: string, label: string, kind: Field["kind"], columns: Column[]
   id, label, kind, columns, status: "empty", text: "", rows: [], issues: [], activeAgent: null, placeholder,
 });
 const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
-const learnerNames = (s: string) => lines(s).filter((l) => !/^max\s*\|/i.test(l)).map((l) => (l.split("|")[0] ?? "").trim());
 
 function headerTask(fid: string, i: MissionInput, extra: [string, string][], deps: string[]) {
   const kv: [string, string][] = [["Teacher", i.teacher], ["School", i.school], ["Grade", i.grade], ["Subject", i.subject], ["Topic", i.topic], ...extra];
@@ -61,7 +60,7 @@ function lessonMission(i: MissionInput) {
     obj: field("lesson-objectives", "Learning objectives", "text"),
     act: field("lesson-activities", "Lesson activities", "table", [{ key: "phase", label: "Phase" }, { key: "activity", label: "Activity" }, { key: "minutes", label: "Min", align: "right" }]),
     asmt: field("lesson-assessment", "Assessment questions", "text"),
-    learn: field("learner-table", "Learner groups", "table", [{ key: "name", label: "Learner" }, { key: "group", label: "Group" }]),
+    learn: field("learner-table", "Each one teach one — peer pairs", "table", [{ key: "name", label: "Learner" }, { key: "score", label: "Result", align: "right" }, { key: "group", label: "Pair" }, { key: "role", label: "Role" }]),
     notes: field("lesson-notes", "Teacher notes", "text"),
   };
   const order = Object.values(p);
@@ -72,9 +71,10 @@ function lessonMission(i: MissionInput) {
   const asmText = maths
     ? "1. 34 + 25 = ___\n2. 68 − 23 = ___\n3. Sam has 47 stickers and gives away 15. How many are left?\n4. Write a number sentence for 52 and 36 together."
     : `1. What is ${topic}?\n2. Give one real-life example.\n3. Explain your answer to a partner.`;
-  const names = learnerNames(i.learners);
-  const groups = ["A", "B", "C"];
-  const notesText = `• Timing: the plan must fit exactly ${i.duration} minutes.\n• Resources: counters, number lines, mini whiteboards, shopping-corner cards.\n• Support: pair learners who need help with a confident partner.${i.instructions ? `\n• Teacher request: ${i.instructions}` : ""}`;
+  const parsed = lines(i.learners).filter((l) => !/^max\s*\|/i.test(l)).map((l) => { const [nm = "", sc = ""] = l.split("|").map((x) => x.trim()); return { name: nm, score: sc === "" ? NaN : Number(sc) }; });
+  const scored = pairLearners(parsed.filter((x) => Number.isFinite(x.score)));
+  const unscored = parsed.filter((x) => !Number.isFinite(x.score));
+  const notesText = `• Timing: the plan must fit exactly ${i.duration} minutes.\n• Resources: counters, number lines, mini whiteboards, shopping-corner cards.\n• Each one teach one: learners are paired by their results — the strongest works with the learner who needs most help, and the peer tutor explains their strategy step by step.${i.instructions ? `\n• Teacher request: ${i.instructions}` : ""}`;
 
   const w1 = headerTask(p.header.id, i, [["Duration", `${i.duration} minutes`]], [creates[0]!.id]);
   const w2 = T("writer", "type_text", p.obj.id, "Writing objectives", { deps: [creates[1]!.id, w1.id], payload: { text: objText, what: "objectives" } });
@@ -84,9 +84,12 @@ function lessonMission(i: MissionInput) {
   });
   const w4 = T("writer", "type_text", p.asmt.id, "Writing assessment", { deps: [creates[3]!.id, w3.id], payload: { text: asmText, what: "assessment questions" } });
   const w5 = T("writer", "type_text", p.notes.id, "Writing teacher notes", { deps: [creates[5]!.id, w4.id], payload: { text: notesText, what: "teacher notes" } });
-  const p7 = T("planner", "populate_table", p.learn.id, "Grouping learners", {
+  const p7 = T("planner", "populate_table", p.learn.id, "Pairing learners by results", {
     deps: [creates[5]!.id],
-    payload: { bubble: "Groups", rows: names.map((name, k) => ({ id: `${p.learn.id}::${k}`, cells: { name, group: `Group ${groups[k % 3]}` }, status: "new" })) },
+    payload: { bubble: "Each one teach one", rows: [
+      ...scored.map((x, k) => ({ id: `${p.learn.id}::${k}`, cells: { name: x.name, score: `${x.score}%`, group: `Pair ${x.pair}`, role: x.role }, status: "new" })),
+      ...unscored.map((x, k) => ({ id: `${p.learn.id}::${scored.length + k}`, cells: { name: x.name, score: "—", group: "Not paired", role: "Result needed" }, status: "new" })),
+    ] },
   });
 
   const durationCheck = (s: StaffroomState): CheckResult => {
