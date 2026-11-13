@@ -88,6 +88,7 @@ export function IntakePanel() {
   };
 
   const upload = (blob: Blob) => guard("Reading your marksheet…", async () => {
+    simulation.reset(); // keep the scripted demo out of a live intake
     const dataUrl = await toDataUrl(blob);
     setImg(dataUrl);
     const m = await api<View>("/api/intake", { dataUrl });
