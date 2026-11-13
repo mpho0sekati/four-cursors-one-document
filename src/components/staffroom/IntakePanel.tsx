@@ -79,7 +79,7 @@ export function IntakePanel() {
   useEffect(() => {
     const id = localStorage.getItem(KEY);
     if (!id) return;
-    api<View & { image?: { dataUrl: string } }>(`/api/intake/${id}?image`).then((m) => { setV(m); setImg(m.image?.dataUrl ?? ""); }).catch(() => localStorage.removeItem(KEY));
+    api<View & { image?: { dataUrl: string } }>(`/api/intake/${id}?image`).then((m) => { setV(m); setImg(m.image?.dataUrl ?? ""); if (m.plan && m.planInput) simulation.start(m.planInput, m.plan); else if (m.register && m.registerInput) simulation.start(m.registerInput, m.register); }).catch(() => localStorage.removeItem(KEY));
   }, []);
   const refresh = async (id = v!.id) => setV(await api<View>(`/api/intake/${id}`));
   const guard = async (label: string, f: () => Promise<void>) => {

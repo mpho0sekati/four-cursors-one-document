@@ -2,8 +2,6 @@ import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, CheckCircle2, Wand2 } from "lucide-react";
 import { useStaffroom } from "@/staffroom/DocumentStore";
 import { AGENTS } from "@/staffroom/agents";
-import { simulation } from "@/staffroom/SimulationController";
-import { EXAMPLES } from "@/staffroom/missions";
 import type { Field, Row } from "@/staffroom/types";
 import { cn } from "@/lib/utils";
 
@@ -134,10 +132,7 @@ export function DocumentCanvas() {
       {!s.input ? (
         <div className="flex h-[900px] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
           <div className="font-display text-2xl font-bold text-foreground">Blank document</div>
-          <p className="max-w-sm text-sm">Choose a mission on the left and press <b>Start mission</b>, or watch the demonstration now.</p>
-          <button type="button" onClick={() => simulation.start(simulation.lastInput ?? EXAMPLES.lesson)} className="no-print mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-paper transition hover:scale-105 hover:brightness-110">
-            ▶ Run AI Colleague Demonstration
-          </button>
+          <p className="max-w-sm text-sm">Snap or upload a handwritten marksheet on the left. The AI colleagues will read it, ask you about anything unclear, and write the register here.</p>
         </div>
       ) : (
         <>

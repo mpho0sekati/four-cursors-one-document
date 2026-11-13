@@ -78,10 +78,6 @@ function Index() {
   const wrap = useRef<HTMLDivElement>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => { if (!staffroom.get().input && !localStorage.getItem("staffroom-intake")) simulation.start(EXAMPLES.lesson); }, 600);
-    return () => clearTimeout(t);
-  }, []);
-  useEffect(() => {
     if (localStorage.getItem("staffroom-panel") === "closed") setPanelOpen(false);
   }, []);
   const togglePanel = () =>
@@ -90,7 +86,7 @@ function Index() {
       return !v;
     });
   return (
-    <div className="print-root grid h-screen grid-cols-[300px_1fr_auto] overflow-hidden bg-background font-sans">
+    <div className="print-root grid h-screen grid-rows-[100%] grid-cols-[340px_1fr_auto] overflow-hidden bg-background font-sans">
       <MissionDesk />
       <main className="print-root flex min-w-0 flex-col overflow-hidden">
         <Toolbar />
