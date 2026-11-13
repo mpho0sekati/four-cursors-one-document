@@ -10,9 +10,12 @@ import type { MissionInput } from "@/staffroom/types";
 interface View {
   id: string; stage: Stage; extraction: Extraction; questions: Question[]; answers: Record<string, number | null>; open: string[];
   confirmed?: Confirmed; register?: RegisterContent; plan?: LessonContent; error?: string;
-  registerInput: MissionInput | null; planInput: MissionInput | null; history: { at: number; stage: Stage; note: string }[];
+  registerInput: MissionInput | null; planInput: MissionInput | null; history: { at: number; stage: Stage; note: string }[]; stale?: boolean;
 }
 const KEY = "staffroom-intake";
+// The (already shrunk, EXIF-free) photo stays on this device so a lost mission can be re-read, never re-invented.
+const PHOTO_KEY = "staffroom-intake-photo";
+class ApiError extends Error { constructor(msg: string, public status: number) { super(msg); } }
 const STAGE_LABEL: Record<Stage, string> = {
   WAITING_FOR_TEACHER: "Waiting for you", READY_FOR_REGISTER: "Ready to build register", REGISTER_RUNNING: "Agents building register",
   REGISTER_VERIFIED: "Register verified", PLAN_RUNNING: "Agents writing plan", PLAN_READY: "Plan ready for approval", APPROVED: "Approved", FAILED: "Failed",
@@ -30,7 +33,7 @@ async function toDataUrl(blob: Blob): Promise<string> {
 const api = async <T,>(url: string, body?: unknown): Promise<T> => {
   const r = await fetch(url, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error ?? `Request failed (${r.status})`);
+  if (!r.ok) throw new ApiError(j.error ?? `Request failed (${r.status})`, r.status);
   return j as T;
 };
 function download(name: string, text: string, type: string) {
@@ -73,24 +76,37 @@ export function IntakePanel() {
   const [logs, setLogs] = useState<{ agent: string; text: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, number | null>>({});
   const [focus, setFocus] = useState<Box | null>(null);
+  const [lost, setLost] = useState(false);
   const docDone = useStaffroom((s) => s.control.complete);
 
   // Resume the same mission after a reload: the server holds the state.
   useEffect(() => {
     const id = localStorage.getItem(KEY);
     if (!id) return;
-    api<View & { image?: { dataUrl: string } }>(`/api/intake/${id}?image`).then((m) => { setV(m); setImg(m.image?.dataUrl ?? ""); if (m.plan && m.planInput) simulation.start(m.planInput, m.plan); else if (m.register && m.registerInput) simulation.start(m.registerInput, m.register); }).catch(() => localStorage.removeItem(KEY));
+    setBusy("Loading your mission…");
+    api<View & { image?: { dataUrl: string } }>(`/api/intake/${id}?image`)
+      .then((m) => { setV(m); setImg(m.image?.dataUrl ?? ""); if (m.plan && m.planInput) simulation.start(m.planInput, m.plan); else if (m.register && m.registerInput) simulation.start(m.registerInput, m.register); })
+      .catch((e) => { if (e instanceof ApiError && e.status === 404) markLost(); else setErr(`Could not load your mission right now (${e instanceof Error ? e.message : "network error"}). Reload to try again.`); })
+      .finally(() => setBusy(""));
   }, []);
+  const markLost = () => { localStorage.removeItem(KEY); setV(null); setLost(true); setImg(localStorage.getItem(PHOTO_KEY) ?? ""); };
   const refresh = async (id = v!.id) => setV(await api<View>(`/api/intake/${id}`));
   const guard = async (label: string, f: () => Promise<void>) => {
     setErr(""); setBusy(label);
-    try { await f(); } catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong"); } finally { setBusy(""); }
+    try { await f(); }
+    catch (e) {
+      if (e instanceof ApiError && e.status === 404) { markLost(); return; }
+      setErr(e instanceof Error ? e.message : "Something went wrong");
+      // Someone (another tab, a double-click) changed the mission first: show the real state.
+      if (e instanceof ApiError && e.status === 409 && v) await refresh().catch(() => {});
+    } finally { setBusy(""); }
   };
 
   const upload = (blob: Blob) => guard("Reading your marksheet…", async () => {
     simulation.reset(); // keep the scripted demo out of a live intake
     const dataUrl = await toDataUrl(blob);
-    setImg(dataUrl);
+    setImg(dataUrl); setLost(false);
+    try { localStorage.setItem(PHOTO_KEY, dataUrl); } catch { /* photo too big for this device: recovery will ask for a new one */ }
     const m = await api<View>("/api/intake", { dataUrl });
     localStorage.setItem(KEY, m.id); setV(m); setDraft({}); setLogs([]);
   });
@@ -107,7 +123,7 @@ export function IntakePanel() {
     setV(await api<View>(`/api/intake/${v!.id}`, { action: "approve" }));
     staffroom.dispatch({ id: `teacher-${Date.now()}`, agentId: "teacher", action: "approve_field", targetId: "document", status: "completed", at: Date.now(), payload: { status: "approved" }, summary: "Teacher approved the register and remedial plan" });
   });
-  const startOver = () => { localStorage.removeItem(KEY); setV(null); setImg(""); setLogs([]); setDraft({}); setErr(""); simulation.reset(); };
+  const startOver = () => { localStorage.removeItem(KEY); localStorage.removeItem(PHOTO_KEY); setLost(false); setV(null); setImg(""); setLogs([]); setDraft({}); setErr(""); simulation.reset(); };
 
   const btn = "flex w-full items-center justify-center gap-2 rounded-md bg-sidebar-primary px-3 py-2 text-sm font-semibold text-sidebar-primary-foreground hover:brightness-110 disabled:opacity-50";
   const ghost = "flex w-full items-center justify-center gap-2 rounded-md border border-sidebar-border px-3 py-2 text-xs font-semibold hover:bg-sidebar-accent disabled:opacity-50";
@@ -117,7 +133,15 @@ export function IntakePanel() {
   return (
     <div className="space-y-3 text-xs">
       <div className="rounded-md border border-writer/40 bg-writer/10 p-2 text-[11px]"><b>Live mode only.</b> A real AI reads your photo; nothing here is pre-filled. Unclear marks are never guessed — you confirm them.</div>
-      {!v && (
+      {lost && (
+        <div className="space-y-2 rounded-md border border-destructive/60 bg-destructive/10 p-2" role="alert">
+          <div className="font-semibold">We couldn't find this mission on the server.</div>
+          <div>It may have been deleted or expired. Nothing was guessed or filled in for you. {img ? "Your photo is still on this device — read it again to start a fresh mission (you'll be asked about unclear marks again)." : "Please upload the marksheet photo again."}</div>
+          {img && <button type="button" className={btn} disabled={!!busy} onClick={() => void fetch(img).then((r) => r.blob()).then(upload)}><RotateCcw className="h-4 w-4" />Read this photo again</button>}
+          <button type="button" className={ghost} disabled={!!busy} onClick={startOver}>Start with a new photo</button>
+        </div>
+      )}
+      {!v && !lost && (
         <>
           <label className={`${btn} cursor-pointer`}><Camera className="h-4 w-4" />Snap or upload a marksheet
             <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" disabled={!!busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
@@ -160,7 +184,9 @@ export function IntakePanel() {
             </div>
           )}
           {v.stage === "READY_FOR_REGISTER" && <button type="button" className={btn} disabled={!!busy} onClick={() => void runStage("register")}><FileText className="h-4 w-4" />Build the register with AI colleagues</button>}
-          {(v.stage === "REGISTER_RUNNING" || v.stage === "PLAN_RUNNING") && !busy && <button type="button" className={ghost} onClick={() => void refresh()}>Agents were still working — check again</button>}
+          {(v.stage === "REGISTER_RUNNING" || v.stage === "PLAN_RUNNING") && !busy && (v.stale
+            ? <button type="button" className={btn} onClick={() => void runStage(v.stage === "REGISTER_RUNNING" ? "register" : "plan")}>The agents were interrupted — start them again</button>
+            : <button type="button" className={ghost} onClick={() => void guard("Checking…", () => refresh())}>Agents are still working — check again</button>)}
           {v.register && (
             <div className="rounded-md border border-sidebar-border p-2">
               <b>Register review:</b> {v.register.rounds ?? 1} review round(s), {v.register.issues ?? 0} issue(s) raised, {v.register.openIssues?.length ?? 0} still open. Verifier: {v.register.consistent ? "consistent" : "needs your review"}.

@@ -116,3 +116,25 @@ export function remedialMission(x: Pick<Extraction, "grade" | "subject" | "topic
     instructions: `Remedial lesson based on the verified register. Class average ${a.classAvgPct ?? "n/a"}%. ${a.below50} learner(s) below 50%. Weakest: ${focus}. ${a.incomplete} learner(s) have missing marks and are not paired until results are supplied. Use peer tutoring (each one teach one).`.slice(0, 2000),
   };
 }
+
+/** A run that has not reported back for this long is treated as interrupted and may be restarted. */
+export const STALE_RUN_MS = 5 * 60_000;
+export type RunGate = { ok: true } | { ok: false; error: string };
+/**
+ * Decides whether an agent run may start. Only one run per stage at a time:
+ * a duplicate request while agents are working (or after they finished) is refused.
+ */
+export function runGate(stage: Stage, kind: "register" | "plan", updatedAt: number, hasRegister: boolean, now = Date.now()): RunGate {
+  const stale = now - updatedAt > STALE_RUN_MS;
+  if (kind === "register") {
+    if (stage === "READY_FOR_REGISTER") return { ok: true };
+    if (stage === "WAITING_FOR_TEACHER") return { ok: false, error: "Waiting for the teacher to confirm uncertain entries" };
+    if (stage === "REGISTER_RUNNING") return stale ? { ok: true } : { ok: false, error: "The agents are already building this register" };
+    return { ok: false, error: "The register is already built" };
+  }
+  if (!hasRegister) return { ok: false, error: "Verify the register first" };
+  if (stage === "REGISTER_VERIFIED" || stage === "FAILED") return { ok: true };
+  if (stage === "PLAN_RUNNING") return stale ? { ok: true } : { ok: false, error: "The agents are already writing this plan" };
+  if (stage === "PLAN_READY" || stage === "APPROVED") return { ok: false, error: "The plan is already written" };
+  return { ok: false, error: "Verify the register first" };
+}

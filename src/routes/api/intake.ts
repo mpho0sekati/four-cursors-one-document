@@ -17,10 +17,11 @@ export const Route = createFileRoute("/api/intake")({
           const extraction = await readMarksheet(p.data.dataUrl);
           const questions = buildQuestions(extraction);
           const now = Date.now();
-          const m = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, stage: "READY_FOR_REGISTER" as const,
-            image: { mime: p.data.dataUrl.slice(5, p.data.dataUrl.indexOf(";")), dataUrl: p.data.dataUrl }, extraction, questions, answers: {}, history: [] };
+          const stage = questions.length ? ("WAITING_FOR_TEACHER" as const) : ("READY_FOR_REGISTER" as const);
+          const m = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, stage,
+            image: { mime: p.data.dataUrl.slice(5, p.data.dataUrl.indexOf(";")), dataUrl: p.data.dataUrl }, extraction, questions, answers: {},
+            history: [{ at: now, stage, note: `Read ${extraction.rows.length} rows; ${questions.length} question(s) for the teacher` }] };
           await store.put(m);
-          await store.move(m, questions.length ? "WAITING_FOR_TEACHER" : "READY_FOR_REGISTER", `Read ${extraction.rows.length} rows; ${questions.length} question(s) for the teacher`);
           console.log(`[intake] ${m.id} rows=${extraction.rows.length} questions=${questions.length}`);
           const { image: _i, ...pub } = m;
           return Response.json({ ...pub, open: unanswered(questions, {}).map((q) => q.id), registerInput: null, planInput: null });

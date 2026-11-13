@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import type { AdkStreamMsg, LessonContent, RegisterContent } from "@/staffroom/adk/content";
-import { cleanGrade, confirm, remedialMission, toRegisterLearners, unanswered } from "@/staffroom/intake/logic";
+import { cleanGrade, confirm, remedialMission, runGate, STALE_RUN_MS, toRegisterLearners, unanswered } from "@/staffroom/intake/logic";
 import type { IntakeMission } from "@/staffroom/intake/store.server";
 import type { MissionInput } from "@/staffroom/types";
 
@@ -17,7 +17,8 @@ function registerInput(m: IntakeMission): MissionInput {
 }
 function view(m: IntakeMission, withImage = false) {
   const { image, ...rest } = m;
-  return { ...rest, open: unanswered(m.questions, m.answers).map((q) => q.id), registerInput: m.confirmed ? registerInput(m) : null,
+  const running = m.stage === "REGISTER_RUNNING" || m.stage === "PLAN_RUNNING";
+  return { ...rest, stale: running && Date.now() - m.updatedAt > STALE_RUN_MS, open: unanswered(m.questions, m.answers).map((q) => q.id), registerInput: m.confirmed ? registerInput(m) : null,
     planInput: m.confirmed && m.register ? remedialMission(m.extraction, m.confirmed) : null, ...(withImage && { image }) };
 }
 
@@ -36,7 +37,18 @@ export const Route = createFileRoute("/api/intake/$id")({
         if (!m) return Response.json({ error: "Mission not found (it may have expired)" }, { status: 404 });
         const a = Action.safeParse(await request.json().catch(() => null));
         if (!a.success) return Response.json({ error: "Invalid action" }, { status: 400 });
-        const act = a.data;
+        try { return await handle(store, m, a.data); }
+        catch (e) {
+          if (e instanceof store.MissionConflict) return Response.json({ error: e.message, conflict: true }, { status: 409 });
+          throw e;
+        }
+      },
+    },
+  },
+});
+
+type Store = typeof import("@/staffroom/intake/store.server");
+async function handle(store: Store, m: IntakeMission, act: z.infer<typeof Action>): Promise<Response> {
         if (act.action === "answer") {
           if (!["WAITING_FOR_TEACHER", "READY_FOR_REGISTER"].includes(m.stage)) return Response.json({ error: "Answers are locked once the register is built" }, { status: 409 });
           const known = new Set(m.questions.map((q) => q.id));
@@ -52,10 +64,12 @@ export const Route = createFileRoute("/api/intake/$id")({
         }
         // run
         const isReg = act.stage === "register";
-        if (isReg && m.stage === "WAITING_FOR_TEACHER") return Response.json({ error: "Waiting for the teacher to confirm uncertain entries" }, { status: 409 });
+        const gate = runGate(m.stage, act.stage, m.updatedAt, !!m.register);
+        if (!gate.ok) return Response.json({ error: gate.error }, { status: 409 });
         if (isReg && !m.confirmed) m.confirmed = confirm(m.extraction, m.questions, m.answers);
-        if (!isReg && !(m.register && ["REGISTER_VERIFIED", "PLAN_READY", "FAILED"].includes(m.stage))) return Response.json({ error: "Verify the register first" }, { status: 409 });
         const input = isReg ? registerInput(m) : remedialMission(m.extraction, m.confirmed!);
+        delete m.error;
+        // Claim the run atomically: a second request racing this one gets a 409 conflict, not a second agent team.
         await store.move(m, isReg ? "REGISTER_RUNNING" : "PLAN_RUNNING", `Agents started the ${act.stage}`);
         const run = isReg ? (await import("@/staffroom/adk/recordsTeam.server")).runRegisterTeam : (await import("@/staffroom/adk/team.server")).runLessonTeam;
         const enc = new TextEncoder();
@@ -68,15 +82,16 @@ export const Route = createFileRoute("/api/intake/$id")({
               else { m.plan = content as LessonContent; await store.move(m, "PLAN_READY", "Remedial plan written from the verified register"); }
               send({ type: "content", content });
             } catch (e) {
-              m.error = e instanceof Error ? e.message : "Agent run failed";
-              await store.move(m, isReg ? "READY_FOR_REGISTER" : "REGISTER_VERIFIED", `Run failed: ${m.error}`);
-              send({ type: "error", message: m.error });
+              const msg = e instanceof Error ? e.message : "Agent run failed";
+              // If another request already took over this mission, leave its state alone.
+              if (!(e instanceof store.MissionConflict)) {
+                m.error = msg;
+                await store.move(m, isReg ? "READY_FOR_REGISTER" : "REGISTER_VERIFIED", `Run failed: ${msg}`).catch(() => {});
+              }
+              send({ type: "error", message: msg });
             }
             c.close();
           },
         });
         return new Response(stream, { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" } });
-      },
-    },
-  },
-});
+}
