@@ -8,7 +8,7 @@ export interface LessonContent {
 /** AI-written words for the progress report; levels stay deterministic. */
 export interface ReportContent { kind: "report"; comments: { name: string; comment: string }[]; summary: string }
 /** AI-written moderation notes for the register; totals stay deterministic. */
-export interface RegisterContent { kind: "register"; summary: string }
+export interface RegisterContent { kind: "register"; summary: string; rounds?: number; issues?: number; openIssues?: string[]; consistent?: boolean }
 export type MissionContent = LessonContent | ReportContent | RegisterContent;
 export const isReport = (c?: MissionContent): c is ReportContent => !!c && "kind" in c && c.kind === "report";
 export const isRegister = (c?: MissionContent): c is RegisterContent => !!c && "kind" in c && c.kind === "register";

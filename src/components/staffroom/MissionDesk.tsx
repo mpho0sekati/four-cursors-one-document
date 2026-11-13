@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Play, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Camera, Keyboard, Play, Sparkles } from "lucide-react";
+import { IntakePanel } from "./IntakePanel";
 import { EXAMPLES } from "@/staffroom/missions";
 import { simulation } from "@/staffroom/SimulationController";
 import type { MissionInput, MissionType } from "@/staffroom/types";
@@ -29,6 +30,8 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
 export function MissionDesk() {
   const [m, setM] = useState<MissionInput>(EXAMPLES.lesson);
   const [live, setLive] = useState(false);
+  const [tab, setTab] = useState<"form" | "photo">("form");
+  useEffect(() => { if (localStorage.getItem("staffroom-intake")) setTab("photo"); }, []);
   const [busy, setBusy] = useState(false);
   const [logs, setLogs] = useState<{ agent: string; text: string }[]>([]);
   const [err, setErr] = useState("");
@@ -48,7 +51,12 @@ export function MissionDesk() {
         <div className="font-display text-lg font-extrabold tracking-tight">Staffroom</div>
         <div className="text-xs text-sidebar-foreground/60">Mission Desk</div>
       </div>
-      <form
+      <div className="flex gap-1 border-b border-sidebar-border px-5 py-2 text-xs">
+        {([["form", "Type it in", Keyboard], ["photo", "From a photo", Camera]] as const).map(([id, label, Icon]) => (
+          <button key={id} type="button" onClick={() => setTab(id)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-semibold ${tab === id ? "bg-sidebar-accent" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"}`}><Icon className="h-3.5 w-3.5" />{label}</button>
+        ))}
+      </div>
+      {tab === "photo" ? <div className="flex-1 overflow-y-auto px-5 py-4"><IntakePanel /></div> : <form
         className="flex-1 space-y-3 overflow-y-auto px-5 py-4"
         onSubmit={(e) => { e.preventDefault(); void run(); }}
       >
@@ -88,7 +96,7 @@ export function MissionDesk() {
             {logs.map((l, k) => <div key={k}><span className="font-bold capitalize" style={{ color: `var(--${l.agent})` }}>{l.agent}</span> {l.text}</div>)}
           </div>
         )}
-      </form>
+      </form>}
       <p className="border-t border-sidebar-border px-5 py-3 text-[10px] leading-snug text-sidebar-foreground/50">
         Demo mode is simulated in your browser. Live mode sends the mission (not learner names) to AI agents; every check is still deterministic code.
       </p>

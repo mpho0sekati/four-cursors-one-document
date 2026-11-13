@@ -55,35 +55,62 @@ export async function runReportTeam(input: MissionInput, send: (m: AdkStreamMsg)
   return { kind: "report", comments: people.map((p) => ({ name: p.name, comment: d.comments[p.id] ?? "" })), summary: [d.summary, d.audit && `Verifier: ${d.audit}`].filter(Boolean).join("\n") };
 }
 
+export const MAX_REVIEW_ROUNDS = 3;
+
 export async function runRegisterTeam(input: MissionInput, send: (m: AdkStreamMsg) => void): Promise<RegisterContent> {
   const { tool, run, model } = kit(send);
   const ls = lines(input.learners);
   const maxLine = ls.find((l) => /^max\s*\|/i.test(l));
   const maxes = maxLine ? parseMarks(maxLine.split("|")[1] ?? "") : [];
+  const maxTotal = maxes.length && maxes.every((m) => m != null) ? computeTotal(maxes) : null;
+  // Learners are numbered; names never go to the model.
   const rows = ls.filter((l) => l !== maxLine).map((l, k) => {
     const [, marks = "", recorded = ""] = l.split("|").map((x) => x.trim());
     const m = parseMarks(marks);
     const total = computeTotal(m);
     return { learner: k + 1, marks: m, recorded: recorded === "" ? null : Number(recorded), calculated: total, missing: m.map((x, q) => (x == null ? `Q${q + 1}` : null)).filter(Boolean), over: m.map((x, q) => (x != null && maxes[q] != null && x > (maxes[q] as number) ? `Q${q + 1}` : null)).filter(Boolean) };
   });
-  const d = { plan: "", summary: "", issues: [] as string[], audit: "" };
-  const mission = `Grade ${input.grade} ${input.subject} assessment register (${input.topic}). Never invent marks; corrected totals are only proposals for the teacher. Teacher request: ${input.instructions || "none"}.`;
+  const complete = rows.filter((r) => r.calculated != null).map((r) => r.calculated as number);
+  // Exact facts every agent must agree with (rounded to 1 decimal, like the document).
+  const facts = {
+    learners: rows.length, maxTotal,
+    verifiedTotals: rows.filter((r) => r.calculated != null && r.recorded === r.calculated).length,
+    mismatchedTotals: rows.filter((r) => r.calculated != null && r.recorded != null && r.recorded !== r.calculated).map((r) => r.learner),
+    missingMarks: rows.filter((r) => r.missing.length).map((r) => r.learner),
+    classAverage: complete.length ? Math.round((complete.reduce((a, b) => a + b, 0) / complete.length) * 10) / 10 : null,
+  };
+  type Issue = { id: number; text: string; open: boolean; round: number };
+  const d = { plan: "", summary: "", issues: [] as Issue[], audit: "", consistent: false };
+  const mission = `Grade ${input.grade} ${input.subject} assessment register (${input.topic}). Learner marks were recorded by the teacher and confirmed from the photo: NEVER change a mark; mismatched totals are only flagged as proposals for the teacher. Teacher request: ${input.instructions || "none"}.`;
   const view = () => ({ plan: d.plan, summary: d.summary, issues: d.issues });
-  const readDoc = (a: string) => tool(a, "read_document", "Read what colleagues have written.", z.object({}), view);
-  const check = (a: string) => tool(a, "check_register", "Deterministically recompute every learner's total and list missing or out-of-range marks.", z.object({}), () => ({ maxes, rows: rows.map((r) => ({ ...r, mismatch: r.calculated != null && r.recorded != null && r.recorded !== r.calculated })) }));
-  const write = (a: string) => tool(a, "write_summary", "Write the moderation summary (3-4 short lines).", z.object({ summary: z.string() }), (x) => { d.summary = x.summary; return { ok: true }; });
+  const readDoc = (a: string) => tool(a, "read_document", "Read what colleagues have written, including review issues and whether they are open.", z.object({}), view);
+  const check = (a: string) => tool(a, "check_register", "Deterministically recompute totals, list missing/out-of-range marks and the exact facts the summary must state.", z.object({}), () => ({ facts, rows: rows.map((r) => ({ ...r, mismatch: r.calculated != null && r.recorded != null && r.recorded !== r.calculated })) }));
+  const write = (a: string) => tool(a, "write_summary", "Write the moderation summary (3-4 short lines). Use only numbers from check_register facts.", z.object({ summary: z.string() }), (x) => { d.summary = x.summary; return { ok: true }; });
   await run([
     new LlmAgent({ name: "planner", model, description: "Plans moderation", instruction: `You are the Planner. Mission: ${mission} Call check_register, then set_plan with one sentence on what moderation must focus on. Reply "done".`,
       tools: [check("planner"), tool("planner", "set_plan", "Set the moderation plan.", z.object({ plan: z.string() }), (x) => { d.plan = x.plan; return { ok: true }; })] }),
-    new LlmAgent({ name: "writer", model, description: "Writes moderation summary", instruction: `You are the Writer. Mission: ${mission} Call read_document and check_register, then write_summary: counts of verified totals, mismatched totals (refer to learners by number), missing marks, and the class average of complete totals. Reply "done".`,
+    new LlmAgent({ name: "writer", model, description: "Writes moderation summary", instruction: `You are the Writer. Mission: ${mission} Call read_document and check_register, then write_summary: counts of verified totals, mismatched totals (refer to learners by number), missing marks, and the class average. Reply "done".`,
       tools: [readDoc("writer"), check("writer"), write("writer")] }),
-    new LlmAgent({ name: "reviewer", model, description: "Reviews summary", instruction: `You are the Reviewer. Mission: ${mission} Call read_document and check_register. Flag with flag_issue any number in the summary that disagrees with check_register, or any invented mark. Do not invent problems. Reply "done".`,
-      tools: [readDoc("reviewer"), check("reviewer"), tool("reviewer", "flag_issue", "Flag a problem.", z.object({ issue: z.string() }), (x) => { d.issues.push(x.issue); return { ok: true }; })] }),
-    new LlmAgent({ name: "corrector", model, description: "Fixes summary", instruction: `You are the Corrector. Mission: ${mission} Call read_document. If there are issues, call check_register and rewrite the summary with write_summary. Otherwise change nothing. Reply "done".`,
-      tools: [readDoc("corrector"), check("corrector"), write("corrector")] }),
-    new LlmAgent({ name: "verifier", model, description: "Final check", instruction: `You are the Verifier. Mission: ${mission} Call read_document and check_register, then report_audit. Reply "done".`,
-      tools: [readDoc("verifier"), check("verifier"), tool("verifier", "report_audit", "Report the final audit.", z.object({ consistent: z.boolean(), summary: z.string() }), (x) => { d.audit = x.summary; return { ok: true }; })] }),
   ]);
+  // Bounded Reviewer -> Corrector -> Reviewer loop: ends when a review round leaves no open issues.
+  let rounds = 0;
+  for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
+    rounds = round;
+    send({ type: "log", agent: "reviewer", text: `Review round ${round} of max ${MAX_REVIEW_ROUNDS}` });
+    await run([new LlmAgent({ name: "reviewer", model, description: "Reviews summary", instruction: `You are the Reviewer, review round ${round}. Mission: ${mission} Call read_document and check_register. For each previously open issue that is now fixed, call resolve_issue. Then flag with flag_issue every remaining number or statement in the summary that disagrees with check_register facts (exact class average to 1 decimal, counts, learner numbers), and any changed or invented mark. Do not invent problems. Reply "done".`,
+      tools: [readDoc("reviewer"), check("reviewer"),
+        tool("reviewer", "flag_issue", "Flag a problem.", z.object({ issue: z.string() }), (x) => { const it = { id: d.issues.length + 1, text: x.issue, open: true, round }; d.issues.push(it); return { ok: true, id: it.id }; }),
+        tool("reviewer", "resolve_issue", "Mark an earlier issue as fixed.", z.object({ id: z.number() }), (x) => { const it = d.issues.find((i) => i.id === x.id); if (it) it.open = false; return { ok: !!it }; })] })]);
+    const open = d.issues.filter((i) => i.open);
+    send({ type: "decision", agent: "reviewer", tool: "review_round", args: { round }, result: { open: open.length } });
+    if (!open.length) break;
+    if (round === MAX_REVIEW_ROUNDS) { send({ type: "log", agent: "reviewer", text: `Stopped after ${round} rounds with ${open.length} open issue(s) — teacher review needed` }); break; }
+    await run([new LlmAgent({ name: "corrector", model, description: "Fixes summary", instruction: `You are the Corrector, round ${round}. Mission: ${mission} Call read_document and check_register, then rewrite the summary with write_summary so every open issue is fixed. You may only fix wording and calculated figures; never change a learner's mark. Reply "done".`,
+      tools: [readDoc("corrector"), check("corrector"), write("corrector")] })]);
+  }
+  await run([new LlmAgent({ name: "verifier", model, description: "Final check", instruction: `You are the Verifier. Mission: ${mission} Call read_document and check_register. Confirm every learner is accounted for, no mark was changed and the summary matches the facts, then call report_audit. Reply "done".`,
+    tools: [readDoc("verifier"), check("verifier"), tool("verifier", "report_audit", "Report the final audit.", z.object({ consistent: z.boolean(), summary: z.string() }), (x) => { d.audit = x.summary; d.consistent = !!x.consistent; return { ok: true }; })] })]);
   if (!d.summary) throw new Error("The agents did not write a moderation summary");
-  return { kind: "register", summary: [d.summary, d.audit && `Verifier: ${d.audit}`].filter(Boolean).join("\n") };
+  const openIssues = d.issues.filter((i) => i.open).map((i) => i.text);
+  return { kind: "register", summary: [d.summary, d.audit && `Verifier: ${d.audit}`].filter(Boolean).join("\n"), rounds, issues: d.issues.length, openIssues, consistent: d.consistent && !openIssues.length };
 }
