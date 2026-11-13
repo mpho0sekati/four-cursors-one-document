@@ -45,7 +45,7 @@ export function MissionDesk() {
   return (
     <aside className="no-print flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border px-5 py-4">
-        <div className="font-display text-lg font-extrabold tracking-tight">AI Staffroom</div>
+        <div className="font-display text-lg font-extrabold tracking-tight">Staffroom</div>
         <div className="text-xs text-sidebar-foreground/60">Mission Desk</div>
       </div>
       <form

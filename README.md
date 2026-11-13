@@ -1,4 +1,4 @@
-# AI Staffroom
+# Staffroom
 
 A frontend demonstration of a swarm-style document workspace for teachers. Five simulated AI colleagues — **Planner**, **Writer**, **Reviewer**, **Corrector** and a final **Verifier** that audits the finished document against the mission — appear as animated cursors that move to real fields on an A4 page and build a lesson plan, progress report or mark register live.
 

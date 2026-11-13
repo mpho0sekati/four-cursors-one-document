@@ -13,9 +13,9 @@ import { simulation } from "@/staffroom/SimulationController";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "AI Staffroom — Watch AI colleagues build your school documents" },
+      { title: "Staffroom — Watch AI colleagues build your school documents" },
       { name: "description", content: "Four animated AI colleagues plan, write, review and correct lesson plans, progress reports and assessment registers in front of you." },
-      { property: "og:title", content: "AI Staffroom" },
+      { property: "og:title", content: "Staffroom" },
       { property: "og:description", content: "Watch four AI colleagues collaborate live on lesson plans, reports and marksheets." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
