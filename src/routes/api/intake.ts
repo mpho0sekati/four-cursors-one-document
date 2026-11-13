@@ -27,7 +27,7 @@ export const Route = createFileRoute("/api/intake")({
           return Response.json({ ...pub, open: unanswered(questions, {}).map((q) => q.id), registerInput: null, planInput: null });
         } catch (e) {
           const status = (e as { status?: number }).status ?? 500;
-          return Response.json({ error: e instanceof Error ? e.message : "Could not read the photo" }, { status: status === 402 || status === 429 ? status : 502 });
+          return Response.json({ error: e instanceof Error ? e.message : "Could not read the photo" }, { status: status === 402 || status === 429 || status === 422 ? status : 502 });
         }
       },
     },

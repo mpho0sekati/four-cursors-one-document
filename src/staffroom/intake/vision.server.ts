@@ -7,7 +7,8 @@ const cell = { type: "object", additionalProperties: false, required: ["value", 
   confidence: { type: "number" }, alternatives: { type: "array", items: { type: "number" } },
   box: { type: ["array", "null"], items: { type: "number" } },
 } };
-const schema = { type: "object", additionalProperties: false, required: ["title", "grade", "subject", "topic", "maxes", "rows"], properties: {
+const schema = { type: "object", additionalProperties: false, required: ["kind", "title", "grade", "subject", "topic", "maxes", "rows"], properties: {
+  kind: { type: "string", enum: ["marksheet", "attendance", "other"] },
   title: { type: "string" }, grade: { type: "string" }, subject: { type: "string" }, topic: { type: "string" },
   maxes: { type: "array", items: { type: ["number", "null"] } },
   rows: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "nameBox", "marks", "recorded"], properties: {
@@ -17,6 +18,7 @@ const schema = { type: "object", additionalProperties: false, required: ["title"
 
 const PROMPT = `You are reading a photographed, handwritten school marksheet. Transcribe exactly what is written.
 Rules:
+- "kind": "marksheet" only if learners have numeric marks/scores per question or test. "attendance" for attendance/daily presence registers (ticks, crosses, O/X per day). "other" for anything else. If not a marksheet, still fill the other fields minimally (rows may be empty).
 - One row per learner. "marks" = per-question marks in column order (exclude the total column). "recorded" = the total the teacher wrote.
 - "maxes" = maximum mark per question if written in the headers (e.g. "Q1 /5" -> 5), else null.
 - For every cell: state "clear" if you can read it with certainty; "unclear" if something is written but could be read in more than one way (smudged, overwritten, crossed out, ambiguous digits like 1/7, 3/8, 5/6); "blank" if nothing is written.
@@ -41,7 +43,12 @@ export async function readMarksheet(dataUrl: string): Promise<Extraction> {
     throw Object.assign(new Error(status === 402 ? "AI credits are used up — add credits to continue." : status === 429 ? "The AI is busy, try again in a minute." : `Could not read the photo (${status})`), { status });
   }
   const text: string = (await res.json()).choices?.[0]?.message?.content ?? "";
-  const x = JSON.parse(text.replace(/^```(json)?|```$/g, "").trim()) as Extraction;
+  const { kind, ...x } = JSON.parse(text.replace(/^```(json)?|```$/g, "").trim()) as Extraction & { kind?: string };
+  if (kind === "attendance") throw Object.assign(new Error("This looks like an attendance register (ticks/crosses per day), not a marksheet. Staffroom needs a sheet with learners' marks per question or test."), { status: 422 });
+  if (kind === "other") throw Object.assign(new Error("This doesn't look like a marksheet. Please photograph a sheet with learners' names and their marks."), { status: 422 });
+  const cells = x.rows.flatMap((r) => r.marks);
+  if (cells.length >= 6 && cells.filter((c) => c.state === "unclear").length / cells.length > 0.5)
+    throw Object.assign(new Error("Most of the marks on this photo can't be read clearly. Please retake it closer, flat and in good light."), { status: 422 });
   if (!Array.isArray(x.rows) || !x.rows.length) throw new Error("No learner rows were found on the photo");
   return x;
 }
