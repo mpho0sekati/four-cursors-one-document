@@ -57,7 +57,8 @@ export async function runReportTeam(input: MissionInput, send: (m: AdkStreamMsg)
 
 export const MAX_REVIEW_ROUNDS = 3;
 
-export async function runRegisterTeam(input: MissionInput, send: (m: AdkStreamMsg) => void): Promise<RegisterContent> {
+/** `inject` is for fault-injection tests only: replaces the Writer's draft before review. */
+export async function runRegisterTeam(input: MissionInput, send: (m: AdkStreamMsg) => void, inject?: { summary: string }): Promise<RegisterContent> {
   const { tool, run, model } = kit(send);
   const ls = lines(input.learners);
   const maxLine = ls.find((l) => /^max\s*\|/i.test(l));
@@ -92,6 +93,7 @@ export async function runRegisterTeam(input: MissionInput, send: (m: AdkStreamMs
     new LlmAgent({ name: "writer", model, description: "Writes moderation summary", instruction: `You are the Writer. Mission: ${mission} Call read_document and check_register, then write_summary: counts of verified totals, mismatched totals (refer to learners by number), missing marks, and the class average. Reply "done".`,
       tools: [readDoc("writer"), check("writer"), write("writer")] }),
   ]);
+  if (inject) d.summary = inject.summary;
   // Bounded Reviewer -> Corrector -> Reviewer loop: ends when a review round leaves no open issues.
   let rounds = 0;
   for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
