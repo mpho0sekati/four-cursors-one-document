@@ -19,8 +19,8 @@ export const Route = createFileRoute("/api/intake")({
           const now = Date.now();
           const m = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, stage: "READY_FOR_REGISTER" as const,
             image: { mime: p.data.dataUrl.slice(5, p.data.dataUrl.indexOf(";")), dataUrl: p.data.dataUrl }, extraction, questions, answers: {}, history: [] };
-          store.put(m);
-          store.move(m, questions.length ? "WAITING_FOR_TEACHER" : "READY_FOR_REGISTER", `Read ${extraction.rows.length} rows; ${questions.length} question(s) for the teacher`);
+          await store.put(m);
+          await store.move(m, questions.length ? "WAITING_FOR_TEACHER" : "READY_FOR_REGISTER", `Read ${extraction.rows.length} rows; ${questions.length} question(s) for the teacher`);
           console.log(`[intake] ${m.id} rows=${extraction.rows.length} questions=${questions.length}`);
           const { image: _i, ...pub } = m;
           return Response.json({ ...pub, open: unanswered(questions, {}).map((q) => q.id), registerInput: null, planInput: null });

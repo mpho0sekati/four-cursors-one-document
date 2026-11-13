@@ -26,13 +26,13 @@ export const Route = createFileRoute("/api/intake/$id")({
   server: {
     handlers: {
       GET: async ({ params, request }) => {
-        const m = (await import("@/staffroom/intake/store.server")).get(params.id);
+        const m = await (await import("@/staffroom/intake/store.server")).get(params.id);
         if (!m) return Response.json({ error: "Mission not found (it may have expired)" }, { status: 404 });
         return Response.json(view(m, new URL(request.url).searchParams.has("image")));
       },
       POST: async ({ params, request }) => {
         const store = await import("@/staffroom/intake/store.server");
-        const m = store.get(params.id);
+        const m = await store.get(params.id);
         if (!m) return Response.json({ error: "Mission not found (it may have expired)" }, { status: 404 });
         const a = Action.safeParse(await request.json().catch(() => null));
         if (!a.success) return Response.json({ error: "Invalid action" }, { status: 400 });
@@ -41,13 +41,13 @@ export const Route = createFileRoute("/api/intake/$id")({
           if (!["WAITING_FOR_TEACHER", "READY_FOR_REGISTER"].includes(m.stage)) return Response.json({ error: "Answers are locked once the register is built" }, { status: 409 });
           const known = new Set(m.questions.map((q) => q.id));
           for (const [k, v] of Object.entries(act.answers)) if (known.has(k)) m.answers[k] = v;
-          if (unanswered(m.questions, m.answers).length) store.move(m, "WAITING_FOR_TEACHER", "Teacher answered some questions");
-          else { m.confirmed = confirm(m.extraction, m.questions, m.answers); store.move(m, "READY_FOR_REGISTER", "Teacher confirmed every uncertain entry"); }
+          if (unanswered(m.questions, m.answers).length) { await store.move(m, "WAITING_FOR_TEACHER", "Teacher answered some questions"); }
+          else { m.confirmed = confirm(m.extraction, m.questions, m.answers); await store.move(m, "READY_FOR_REGISTER", "Teacher confirmed every uncertain entry"); }
           return Response.json(view(m));
         }
         if (act.action === "approve") {
           if (m.stage !== "PLAN_READY") return Response.json({ error: "The plan is not ready for approval" }, { status: 409 });
-          store.move(m, "APPROVED", "Teacher approved the register and remedial plan");
+          await store.move(m, "APPROVED", "Teacher approved the register and remedial plan");
           return Response.json(view(m));
         }
         // run
@@ -56,7 +56,7 @@ export const Route = createFileRoute("/api/intake/$id")({
         if (isReg && !m.confirmed) m.confirmed = confirm(m.extraction, m.questions, m.answers);
         if (!isReg && !(m.register && ["REGISTER_VERIFIED", "PLAN_READY", "FAILED"].includes(m.stage))) return Response.json({ error: "Verify the register first" }, { status: 409 });
         const input = isReg ? registerInput(m) : remedialMission(m.extraction, m.confirmed!);
-        store.move(m, isReg ? "REGISTER_RUNNING" : "PLAN_RUNNING", `Agents started the ${act.stage}`);
+        await store.move(m, isReg ? "REGISTER_RUNNING" : "PLAN_RUNNING", `Agents started the ${act.stage}`);
         const run = isReg ? (await import("@/staffroom/adk/recordsTeam.server")).runRegisterTeam : (await import("@/staffroom/adk/team.server")).runLessonTeam;
         const enc = new TextEncoder();
         const stream = new ReadableStream({
@@ -64,12 +64,12 @@ export const Route = createFileRoute("/api/intake/$id")({
             const send = (x: AdkStreamMsg) => c.enqueue(enc.encode(JSON.stringify(x) + "\n"));
             try {
               const content = await run(input, send);
-              if (isReg) { const reg = content as RegisterContent; m.register = reg; store.move(m, "REGISTER_VERIFIED", `Register verified after ${reg.rounds ?? 1} review round(s)`); }
-              else { m.plan = content as LessonContent; store.move(m, "PLAN_READY", "Remedial plan written from the verified register"); }
+              if (isReg) { const reg = content as RegisterContent; m.register = reg; await store.move(m, "REGISTER_VERIFIED", `Register verified after ${reg.rounds ?? 1} review round(s)`); }
+              else { m.plan = content as LessonContent; await store.move(m, "PLAN_READY", "Remedial plan written from the verified register"); }
               send({ type: "content", content });
             } catch (e) {
               m.error = e instanceof Error ? e.message : "Agent run failed";
-              store.move(m, isReg ? "READY_FOR_REGISTER" : "REGISTER_VERIFIED", `Run failed: ${m.error}`);
+              await store.move(m, isReg ? "READY_FOR_REGISTER" : "REGISTER_VERIFIED", `Run failed: ${m.error}`);
               send({ type: "error", message: m.error });
             }
             c.close();
