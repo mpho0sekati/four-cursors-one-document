@@ -30,7 +30,7 @@ Actions: `navigate_to_field`, `focus_field`, `create_section`, `type_text`, `pop
 5. **Teacher approval.** Corrections to recorded marks are left as `proposed` until the teacher approves (`agentId: "teacher"`).
 6. **Sound** is a side-effect subscriber (`staffroom.onEvent`) in `sound.ts`; no audio files.
 
-## Replacing the simulation with a real backend
+## Event producers
 
 `SimulationController` is just an event producer. A real multi-agent backend (e.g. ADK, CrewAI) can stream the same `AgentEvent` objects — over WebSocket or SSE — and call `staffroom.dispatch(event)` for each. The canvas, cursors, log and sound need no changes.
 
