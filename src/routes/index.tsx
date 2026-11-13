@@ -28,6 +28,7 @@ function Toolbar() {
   const status = useStaffroom((s) => s.status);
   const complete = useStaffroom((s) => s.control.complete);
   const type = useStaffroom((s) => s.input?.type);
+  const live = useStaffroom((s) => !!s.control.live);
   const hasMissing = useStaffroom((s) => Object.values(s.fields).some((f) => f.rows.some((r) => r.status === "missing")));
   const proposed = useStaffroom((s) => Object.values(s.fields).reduce((a, f) => a + f.rows.filter((r) => r.status === "proposed").length, 0));
 
@@ -54,7 +55,9 @@ function Toolbar() {
   const btn = "inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-40";
   return (
     <div className="no-print flex items-center gap-2 border-b bg-background/80 px-6 py-2.5 backdrop-blur">
-      <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Frontend demonstration · simulated agents</span>
+      {live
+        ? <span className="inline-flex items-center gap-1.5 rounded-full bg-writer/15 px-2.5 py-1 text-[11px] font-semibold text-writer"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-writer" />Live · real AI agents (Google ADK)</span>
+        : <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">Demo mode · scripted colleagues</span>}
       <div className="ml-auto flex gap-2">
         <button onClick={toggleSound} aria-pressed={sound} aria-label={sound ? "Mute sound" : "Turn sound on"} className={btn}>
           <span aria-hidden>{sound ? "🔊" : "🔇"}</span>Sound
@@ -75,7 +78,7 @@ function Index() {
   const wrap = useRef<HTMLDivElement>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => { if (!staffroom.get().input) simulation.start(EXAMPLES.lesson); }, 600);
+    const t = setTimeout(() => { if (!staffroom.get().input && !localStorage.getItem("staffroom-intake")) simulation.start(EXAMPLES.lesson); }, 600);
     return () => clearTimeout(t);
   }, []);
   useEffect(() => {

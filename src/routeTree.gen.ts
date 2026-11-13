@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAdkMissionRouteImport } from './routes/api/adk-mission'
+import { Route as ApiIntakeRouteImport } from './routes/api/intake'
+import { Route as ApiIntakeIdRouteImport } from './routes/api/intake.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +24,48 @@ const ApiAdkMissionRoute = ApiAdkMissionRouteImport.update({
   path: '/api/adk-mission',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiIntakeRoute = ApiIntakeRouteImport.update({
+  id: '/api/intake',
+  path: '/api/intake',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiIntakeIdRoute = ApiIntakeIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiIntakeRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/adk-mission': typeof ApiAdkMissionRoute
+  '/api/intake': typeof ApiIntakeRouteWithChildren
+  '/api/intake/$id': typeof ApiIntakeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/adk-mission': typeof ApiAdkMissionRoute
+  '/api/intake': typeof ApiIntakeRouteWithChildren
+  '/api/intake/$id': typeof ApiIntakeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/adk-mission': typeof ApiAdkMissionRoute
+  '/api/intake': typeof ApiIntakeRouteWithChildren
+  '/api/intake/$id': typeof ApiIntakeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/adk-mission'
+  fullPaths: '/' | '/api/adk-mission' | '/api/intake' | '/api/intake/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/adk-mission'
-  id: '__root__' | '/' | '/api/adk-mission'
+  to: '/' | '/api/adk-mission' | '/api/intake' | '/api/intake/$id'
+  id: '__root__' | '/' | '/api/adk-mission' | '/api/intake' | '/api/intake/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAdkMissionRoute: typeof ApiAdkMissionRoute
+  ApiIntakeRoute: typeof ApiIntakeRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +84,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdkMissionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/intake': {
+      id: '/api/intake'
+      path: '/api/intake'
+      fullPath: '/api/intake'
+      preLoaderRoute: typeof ApiIntakeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/intake/$id': {
+      id: '/api/intake/$id'
+      path: '/$id'
+      fullPath: '/api/intake/$id'
+      preLoaderRoute: typeof ApiIntakeIdRouteImport
+      parentRoute: typeof ApiIntakeRoute
+    }
   }
 }
+
+interface ApiIntakeRouteChildren {
+  ApiIntakeIdRoute: typeof ApiIntakeIdRoute
+}
+
+const ApiIntakeRouteChildren: ApiIntakeRouteChildren = {
+  ApiIntakeIdRoute: ApiIntakeIdRoute,
+}
+
+const ApiIntakeRouteWithChildren = ApiIntakeRoute._addFileChildren(
+  ApiIntakeRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAdkMissionRoute: ApiAdkMissionRoute,
+  ApiIntakeRoute: ApiIntakeRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

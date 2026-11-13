@@ -157,7 +157,7 @@ export function DocumentCanvas() {
             <div data-doc-end className="h-0" />
           </div>
           <footer className="mt-10 border-t pt-3 text-[10px] text-muted-foreground">
-            {stamp} document · Prepared with Staffroom (frontend demonstration — simulated agents, deterministic local checks). Verify before official use.
+            {stamp} document · Prepared with Staffroom ({s.control.live ? "written by live AI agents" : "demo mode — scripted colleagues"}; every total checked by deterministic code). Verify before official use.
           </footer>
         </>
       )}

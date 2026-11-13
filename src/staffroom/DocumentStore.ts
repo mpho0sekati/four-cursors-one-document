@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { AGENT_IDS } from "./agents";
 import type { AgentEvent, AgentId, AgentState, DocStatus, Field, MissionInput, Row } from "./types";
 
-export interface Control { running: boolean; paused: boolean; speed: 1 | 2 | 3; complete: boolean; regroup: boolean; done: number; total: number }
+export interface Control { running: boolean; paused: boolean; speed: 1 | 2 | 3; complete: boolean; regroup: boolean; done: number; total: number; /** Real AI agents produced this run (vs the scripted demo). */ live?: boolean }
 
 export interface StaffroomState {
   input: MissionInput | null;

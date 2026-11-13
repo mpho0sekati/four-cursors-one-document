@@ -22,7 +22,7 @@ export class SimulationController {
   lastInput: MissionInput | null = null;
 
   /** Live mode: real Google ADK agents decide; each tool call becomes cursor work as it happens. */
-  async startLive(input: MissionInput, onLog: (agent: string, text: string) => void): Promise<void> {
+  async startLive(input: MissionInput, onLog: (agent: string, text: string) => void, req?: { url: string; body: unknown }): Promise<void> {
     this.token++;
     const tok = this.token;
     this.lastInput = input;
@@ -33,10 +33,11 @@ export class SimulationController {
     AGENT_IDS.forEach((a) => (this.busy[a] = false));
     this.paused = false;
     this.live = true;
-    this.syncControl({ running: true, complete: false, regroup: false });
+    this.syncControl({ running: true, complete: false, regroup: false, live: true });
     void this.loop(tok);
     try {
-      const res = await fetch("/api/adk-mission", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+      const res = await fetch(req?.url ?? "/api/adk-mission", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req?.body ?? input) });
+      if (res.status >= 400 && res.status < 500) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Request refused (${res.status})`);
       if (!res.ok || !res.body) throw new Error(`Agent team unavailable (${res.status})`);
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -81,7 +82,7 @@ export class SimulationController {
     this.scheduler.load(mission.tasks);
     AGENT_IDS.forEach((a) => (this.busy[a] = false));
     this.paused = false;
-    this.syncControl({ running: true, complete: false, regroup: false });
+    this.syncControl({ running: true, complete: false, regroup: false, live: !!content });
     void this.loop(tok);
   }
   /** Stop everything and return to a blank page; Replay still remembers the last mission. */
@@ -92,7 +93,7 @@ export class SimulationController {
     AGENT_IDS.forEach((a) => (this.busy[a] = false));
     this.paused = false;
     staffroom.reset(initialState());
-    this.syncControl({ running: false, complete: false, regroup: false });
+    this.syncControl({ running: false, complete: false, regroup: false, live: false });
   }
   restart() { if (this.lastInput) this.start(this.lastInput, this.lastContent); }
   pause() { this.paused = true; this.syncControl({}); }
