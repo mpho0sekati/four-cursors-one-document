@@ -2,6 +2,7 @@ import { AGENTS, AGENT_IDS } from "./agents";
 import { initialState, staffroom } from "./DocumentStore";
 import { buildMission } from "./missions";
 import { TaskScheduler } from "./TaskScheduler";
+import type { AdkStreamMsg, LessonContent } from "./adk/content";
 import type { ActionType, AgentEvent, AgentId, CheckResult, EventStatus, MissionInput, Payload, Task } from "./types";
 
 class Aborted extends Error {}
@@ -19,11 +20,38 @@ export class SimulationController {
   private evt = 0;
   lastInput: MissionInput | null = null;
 
-  start(input: MissionInput) {
+  /** Live mode: the Google ADK agent team writes the content on the server, then the cursors play it out. */
+  async startLive(input: MissionInput, onLog: (agent: string, text: string) => void): Promise<void> {
+    const res = await fetch("/api/adk-mission", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    if (!res.ok || !res.body) throw new Error(`Agent team unavailable (${res.status})`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let content: LessonContent | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const m = JSON.parse(buf.slice(0, nl)) as AdkStreamMsg;
+        buf = buf.slice(nl + 1);
+        if (m.type === "log") onLog(m.agent, m.text);
+        else if (m.type === "error") throw new Error(m.message);
+        else content = m.content;
+      }
+    }
+    if (!content) throw new Error("The agent team returned no content");
+    this.start(input, content);
+  }
+
+  private lastContent: LessonContent | undefined;
+  start(input: MissionInput, content?: LessonContent) {
     this.token++;
     const tok = this.token;
     this.lastInput = input;
-    const mission = buildMission(input);
+    this.lastContent = content;
+    const mission = buildMission(input, content);
     staffroom.reset(initialState(input, mission.title));
     this.scheduler.load(mission.tasks);
     AGENT_IDS.forEach((a) => (this.busy[a] = false));
@@ -40,7 +68,7 @@ export class SimulationController {
     staffroom.reset(initialState());
     this.syncControl({ running: false, complete: false, regroup: false });
   }
-  restart() { if (this.lastInput) this.start(this.lastInput); }
+  restart() { if (this.lastInput) this.start(this.lastInput, this.lastContent); }
   pause() { this.paused = true; this.syncControl({}); }
   resume() { this.paused = false; this.syncControl({}); }
   setSpeed(s: 1 | 2 | 3) { this.speed = s; this.syncControl({}); }

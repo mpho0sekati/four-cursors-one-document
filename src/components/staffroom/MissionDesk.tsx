@@ -28,6 +28,18 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
 
 export function MissionDesk() {
   const [m, setM] = useState<MissionInput>(EXAMPLES.lesson);
+  const [live, setLive] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [logs, setLogs] = useState<{ agent: string; text: string }[]>([]);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    setErr("");
+    if (!live || m.type !== "lesson") { simulation.start(m); return; }
+    setBusy(true); setLogs([]);
+    try { await simulation.startLive(m, (agent, text) => setLogs((l) => [...l.slice(-40), { agent, text }])); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Agent run failed"); }
+    finally { setBusy(false); }
+  };
   const set = <K extends keyof MissionInput>(k: K, v: MissionInput[K]) => setM((x) => ({ ...x, [k]: v }));
 
   return (
@@ -38,7 +50,7 @@ export function MissionDesk() {
       </div>
       <form
         className="flex-1 space-y-3 overflow-y-auto px-5 py-4"
-        onSubmit={(e) => { e.preventDefault(); simulation.start(m); }}
+        onSubmit={(e) => { e.preventDefault(); void run(); }}
       >
         <L label="Document type">
           <select className={inputCls} value={m.type} onChange={(e) => setM(EXAMPLES[e.target.value as MissionType])}>
@@ -63,12 +75,22 @@ export function MissionDesk() {
           <span className="block text-[10px] text-sidebar-foreground/50">{LEARNER_HINT[m.type]}</span>
         </L>
         <L label="Additional instructions"><textarea rows={3} className={inputCls} value={m.instructions} onChange={(e) => set("instructions", e.target.value)} /></L>
-        <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-md bg-sidebar-primary px-4 py-2.5 text-sm font-semibold text-sidebar-primary-foreground shadow-lg transition hover:brightness-110">
-          <Play className="h-4 w-4" /> Start mission
+        <label className="flex items-start gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/50 p-2.5 text-xs">
+          <input type="checkbox" className="mt-0.5" checked={live} onChange={(e) => setLive(e.target.checked)} disabled={m.type !== "lesson"} />
+          <span><span className="font-semibold">Live AI agents (Google ADK)</span><br /><span className="text-sidebar-foreground/60">{m.type === "lesson" ? "Real AI colleagues write the lesson; takes about a minute." : "Available for lesson plans."}</span></span>
+        </label>
+        <button type="submit" disabled={busy} className="flex w-full disabled:opacity-60 items-center justify-center gap-2 rounded-md bg-sidebar-primary px-4 py-2.5 text-sm font-semibold text-sidebar-primary-foreground shadow-lg transition hover:brightness-110">
+          <Play className="h-4 w-4" /> {busy ? "AI colleagues are thinking…" : "Start mission"}
         </button>
+        {err && <p className="text-xs text-destructive">{err}</p>}
+        {logs.length > 0 && (
+          <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-sidebar-border p-2 font-mono text-[10px] leading-snug">
+            {logs.map((l, k) => <div key={k}><span className="font-bold capitalize" style={{ color: `var(--${l.agent})` }}>{l.agent}</span> {l.text}</div>)}
+          </div>
+        )}
       </form>
       <p className="border-t border-sidebar-border px-5 py-3 text-[10px] leading-snug text-sidebar-foreground/50">
-        Frontend demonstration. Agents are simulated; all checks are deterministic code running in your browser. No data leaves this page.
+        Demo mode is simulated in your browser. Live mode sends the mission (not learner names) to AI agents; every check is still deterministic code.
       </p>
     </aside>
   );

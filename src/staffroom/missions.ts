@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { StaffroomState } from "./DocumentStore";
+import type { LessonContent } from "./adk/content";
 import type { AgentId, Cells, CheckResult, Column, Field, MissionInput, Payload, Row, Task } from "./types";
 import { pairLearners, checkLessonDuration, computeTotal, draftLevel, levelFromPercent, parseMarks, rebalanceMinutes } from "./validation";
 
@@ -56,7 +57,7 @@ const DRAFT_ACTIVITIES = [
   ["Exit ticket", "Three independent questions and a thumbs-up reflection", 10],
 ] as const;
 
-function lessonMission(i: MissionInput) {
+function lessonMission(i: MissionInput, ai?: LessonContent) {
   const topic = i.topic || "the topic";
   const maths = /math/i.test(i.subject);
   const p = {
@@ -71,20 +72,26 @@ function lessonMission(i: MissionInput) {
   const creates = order.map((f, k) => T("planner", "create_section", f.id, `Creating “${f.label}”`, { id: `p-${f.id}`, duration: 150, payload: { field: f, bubble: "New section" } }));
   creates.forEach((c, k) => k && c.deps.push(creates[k - 1]!.id));
 
-  const objText = `By the end of this ${i.duration}-minute lesson, Grade ${i.grade} learners will:\n• Explain ${topic.toLowerCase()} using concrete objects and a number line.\n• ${maths ? "Solve two-digit addition and subtraction problems without regrouping." : `Apply key ideas of ${topic.toLowerCase()} in a short task.`}\n• Describe their strategy to a partner using correct vocabulary.`;
-  const asmText = maths
+  let objText = `By the end of this ${i.duration}-minute lesson, Grade ${i.grade} learners will:\n• Explain ${topic.toLowerCase()} using concrete objects and a number line.\n• ${maths ? "Solve two-digit addition and subtraction problems without regrouping." : `Apply key ideas of ${topic.toLowerCase()} in a short task.`}\n• Describe their strategy to a partner using correct vocabulary.`;
+  let asmText = maths
     ? "1. 34 + 25 = ___\n2. 68 − 23 = ___\n3. Sam has 47 stickers and gives away 15. How many are left?\n4. Write a number sentence for 52 and 36 together."
     : `1. What is ${topic}?\n2. Give one real-life example.\n3. Explain your answer to a partner.`;
   const parsed = lines(i.learners).filter((l) => !/^max\s*\|/i.test(l)).map((l) => { const [nm = "", sc = ""] = l.split("|").map((x) => x.trim()); return { name: nm, score: sc === "" ? NaN : Number(sc) }; });
   const scored = pairLearners(parsed.filter((x) => Number.isFinite(x.score)));
   const unscored = parsed.filter((x) => !Number.isFinite(x.score));
-  const notesText = `• Timing: the plan must fit exactly ${i.duration} minutes.\n• Resources: counters, number lines, mini whiteboards, shopping-corner cards.\n• Each one teach one: learners are paired by their results — the strongest works with the learner who needs most help, and the peer tutor explains their strategy step by step.${i.instructions ? `\n• Teacher request: ${i.instructions}` : ""}`;
+  let notesText = `• Timing: the plan must fit exactly ${i.duration} minutes.\n• Resources: counters, number lines, mini whiteboards, shopping-corner cards.\n• Each one teach one: learners are paired by their results — the strongest works with the learner who needs most help, and the peer tutor explains their strategy step by step.${i.instructions ? `\n• Teacher request: ${i.instructions}` : ""}`;
 
+  if (ai) {
+    objText = `By the end of this ${i.duration}-minute lesson, Grade ${i.grade} learners will:\n${ai.objectives.map((x) => `• ${x}`).join("\n")}`;
+    asmText = ai.assessment.map((q, k) => `${k + 1}. ${q.replace(/^\d+[.)]\s*/, "")}`).join("\n");
+    notesText = [...ai.notes.map((x) => `• ${x}`), "• Each one teach one: learners are paired by their results — the strongest works with the learner who needs most help."].join("\n");
+  }
+  const activityRows: (readonly [string, string, number])[] = ai ? ai.activities.map((r) => [r.phase, r.activity, Math.round(r.minutes)] as const) : DRAFT_ACTIVITIES.map(([a, b, c]) => [a, b, c] as const);
   const w1 = headerTask(p.header.id, i, [["Duration", `${i.duration} minutes`]], [creates[0]!.id]);
   const w2 = T("writer", "type_text", p.obj.id, "Writing objectives", { deps: [creates[1]!.id, w1.id], payload: { text: objText, what: "objectives" } });
   const w3 = T("writer", "populate_table", p.act.id, "Drafting activities", {
     deps: [creates[2]!.id, w2.id],
-    payload: { bubble: "Activities", rows: DRAFT_ACTIVITIES.map(([phase, a, m], k) => ({ id: `${p.act.id}::${k}`, cells: { phase, activity: a.replace("{topic}", topic.toLowerCase()), minutes: String(m) }, status: "new" })) },
+    payload: { bubble: "Activities", rows: activityRows.map(([phase, a, m], k) => ({ id: `${p.act.id}::${k}`, cells: { phase, activity: a.replace("{topic}", topic.toLowerCase()), minutes: String(m) }, status: "new" })) },
   });
   const w4 = T("writer", "type_text", p.asmt.id, "Writing assessment", { deps: [creates[3]!.id, w3.id], payload: { text: asmText, what: "assessment questions" } });
   const w5 = T("writer", "type_text", p.notes.id, "Writing teacher notes", { deps: [creates[5]!.id, w4.id], payload: { text: notesText, what: "teacher notes" } });
@@ -326,9 +333,9 @@ function registerMission(i: MissionInput) {
   return { title: "Assessment Register", tasks: [...creates, w1, T("reviewer", "validate_field", header.id, "Checking details", { deps: [w1.id], duration: 500, payload: { check: headerCheck(header.id) } }), ...tasks, sum, ...audits, gen] };
 }
 
-export function buildMission(i: MissionInput): { title: string; tasks: Task[] } {
+export function buildMission(i: MissionInput, ai?: LessonContent): { title: string; tasks: Task[] } {
   n = 0;
-  return i.type === "lesson" ? lessonMission(i) : i.type === "report" ? reportMission(i) : registerMission(i);
+  return i.type === "lesson" ? lessonMission(i, ai) : i.type === "report" ? reportMission(i) : registerMission(i);
 }
 
 export function registerCsv(s: StaffroomState): string {
