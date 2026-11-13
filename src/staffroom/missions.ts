@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { StaffroomState } from "./DocumentStore";
-import type { LessonContent } from "./adk/content";
+import { isLesson, isRegister, isReport, type LessonContent, type MissionContent, type ReportContent } from "./adk/content";
 import type { AgentId, Cells, CheckResult, Column, Field, MissionInput, Payload, Row, Task } from "./types";
 import { pairLearners, checkLessonDuration, computeTotal, draftLevel, levelFromPercent, parseMarks, rebalanceMinutes } from "./validation";
 
@@ -185,7 +185,8 @@ const COMMENTS: Record<number, string> = {
 };
 const commentFor = (lvl: number) => COMMENTS[lvl] ?? "Excellent work this term.";
 
-function reportMission(i: MissionInput) {
+function reportMission(i: MissionInput, ai?: ReportContent) {
+  const aiComment = (name: string | undefined, lvl: number) => ai?.comments.find((c) => c.name === name)?.comment || commentFor(lvl);
   const header = field("report-header", "Report details", "kv", [{ key: "k", label: "Item" }, { key: "v", label: "Detail" }]);
   const table = field("learner-table", "Learner progress", "table", [{ key: "name", label: "Learner" }, { key: "pct", label: "%", align: "right" }, { key: "level", label: "Level", align: "center" }, { key: "comment", label: "Comment" }]);
   const summary = field("report-summary", "Class summary", "text");
@@ -200,7 +201,7 @@ function reportMission(i: MissionInput) {
     const lvl = Number.isFinite(pp.pct) ? draftLevel(pp.pct) : NaN;
     const w = T("writer", "populate_table", rid, `Writing ${pp.name}`, {
       deps: [prev], duration: 450,
-      payload: { what: `Added ${pp.name}`, row: { id: rid, status: "new", cells: { name: pp.name, pct: Number.isFinite(pp.pct) ? String(pp.pct) : "", level: Number.isFinite(lvl) ? String(lvl) : "", comment: Number.isFinite(lvl) ? commentFor(lvl) : "" } } },
+      payload: { what: `Added ${pp.name}`, row: { id: rid, status: "new", cells: { name: pp.name, pct: Number.isFinite(pp.pct) ? String(pp.pct) : "", level: Number.isFinite(lvl) ? String(lvl) : "", comment: Number.isFinite(lvl) ? aiComment(pp.name, lvl) : "" } } },
     });
     prev = w.id;
     const check = (s: StaffroomState): CheckResult => {
@@ -208,7 +209,7 @@ function reportMission(i: MissionInput) {
       if (row.cells.pct === "") return { ok: false, issue: `${pp.name}: no percentage supplied — not invented` };
       const want = levelFromPercent(Number(row.cells.pct));
       const got = Number(row.cells.level);
-      return got === want ? { ok: true, summary: `${pp.name}: level ${got} ✓` } : { ok: false, issue: `${pp.name}: ${row.cells.pct}% should be level ${want}, recorded ${got}`, fix: { level: String(want), comment: commentFor(want), was: got } };
+      return got === want ? { ok: true, summary: `${pp.name}: level ${got} ✓` } : { ok: false, issue: `${pp.name}: ${row.cells.pct}% should be level ${want}, recorded ${got}`, fix: { level: String(want), comment: aiComment(pp.name, want), was: got } };
     };
     const review = (id: string, deps: string[], attempt: number): Task => T("reviewer", "validate_field", rid, attempt ? `Re-checking ${pp.name}` : `Checking ${pp.name}`, {
       id, deps, duration: 550,
@@ -235,7 +236,7 @@ function reportMission(i: MissionInput) {
         const rows = s.fields[table.id]!.rows.filter((r) => r.cells.pct !== "");
         const avg = rows.length ? Math.round(rows.reduce((a, r) => a + Number(r.cells.pct), 0) / rows.length) : 0;
         const fixed = s.fields[table.id]!.rows.filter((r) => r.status === "corrected").length;
-        return `${rows.length} learners assessed. Class average: ${avg}% (level ${levelFromPercent(avg)}).\n${fixed} level${fixed === 1 ? "" : "s"} corrected after review against the CAPS scale.${i.instructions ? `\nNote: ${i.instructions}` : ""}`;
+        return `${rows.length} learners assessed. Class average: ${avg}% (level ${levelFromPercent(avg)}).\n${fixed} level${fixed === 1 ? "" : "s"} corrected after review against the CAPS scale.${ai?.summary ? `\n${ai.summary}` : i.instructions ? `\nNote: ${i.instructions}` : ""}`;
       },
     },
   });
@@ -252,7 +253,7 @@ function reportMission(i: MissionInput) {
 }
 
 // ---------------- Assessment register ----------------
-function registerMission(i: MissionInput) {
+function registerMission(i: MissionInput, aiSummary?: string) {
   const ls = lines(i.learners);
   const maxLine = ls.find((l) => /^max\s*\|/i.test(l));
   const rowsIn = ls.filter((l) => l !== maxLine).map((l) => {
@@ -317,7 +318,7 @@ function registerMission(i: MissionInput) {
         const rows = s.fields[sheet.id]!.rows;
         const totals = rows.map((r) => Number(r.cells.calculated)).filter((x) => Number.isFinite(x));
         const avg = totals.length ? (totals.reduce((a, b) => a + b, 0) / totals.length).toFixed(1) : "—";
-        return `${rows.length} learners captured. ${rows.filter((r) => r.status === "ok").length} totals verified.\n${rows.filter((r) => r.status === "proposed").length} corrected total(s) proposed — teacher approval required.\n${rows.filter((r) => r.status === "missing").length} learner(s) with missing marks — left blank, not estimated.\nAverage of complete totals: ${avg}${maxTotal != null ? ` / ${maxTotal}` : ""}.`;
+        return `${rows.length} learners captured. ${rows.filter((r) => r.status === "ok").length} totals verified.\n${rows.filter((r) => r.status === "proposed").length} corrected total(s) proposed — teacher approval required.\n${rows.filter((r) => r.status === "missing").length} learner(s) with missing marks — left blank, not estimated.\nAverage of complete totals: ${avg}${maxTotal != null ? ` / ${maxTotal}` : ""}.${aiSummary ? `\nAI moderation note: ${aiSummary}` : ""}`;
       },
     },
   });
@@ -333,9 +334,9 @@ function registerMission(i: MissionInput) {
   return { title: "Assessment Register", tasks: [...creates, w1, T("reviewer", "validate_field", header.id, "Checking details", { deps: [w1.id], duration: 500, payload: { check: headerCheck(header.id) } }), ...tasks, sum, ...audits, gen] };
 }
 
-export function buildMission(i: MissionInput, ai?: LessonContent): { title: string; tasks: Task[] } {
+export function buildMission(i: MissionInput, ai?: MissionContent): { title: string; tasks: Task[] } {
   n = 0;
-  return i.type === "lesson" ? lessonMission(i, ai) : i.type === "report" ? reportMission(i) : registerMission(i);
+  return i.type === "lesson" ? lessonMission(i, isLesson(ai) ? ai : undefined) : i.type === "report" ? reportMission(i, isReport(ai) ? ai : undefined) : registerMission(i, isRegister(ai) ? ai.summary : undefined);
 }
 
 export function registerCsv(s: StaffroomState): string {

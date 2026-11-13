@@ -34,7 +34,7 @@ export function MissionDesk() {
   const [err, setErr] = useState("");
   const run = async () => {
     setErr("");
-    if (!live || m.type !== "lesson") { simulation.start(m); return; }
+    if (!live) { simulation.start(m); return; }
     setBusy(true); setLogs([]);
     try { await simulation.startLive(m, (agent, text) => setLogs((l) => [...l.slice(-40), { agent, text }])); }
     catch (e) { setErr(e instanceof Error ? e.message : "Agent run failed"); }
@@ -76,8 +76,8 @@ export function MissionDesk() {
         </L>
         <L label="Additional instructions"><textarea rows={3} className={inputCls} value={m.instructions} onChange={(e) => set("instructions", e.target.value)} /></L>
         <label className="flex items-start gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/50 p-2.5 text-xs">
-          <input type="checkbox" className="mt-0.5" checked={live} onChange={(e) => setLive(e.target.checked)} disabled={m.type !== "lesson"} />
-          <span><span className="font-semibold">Live AI agents (Google ADK)</span><br /><span className="text-sidebar-foreground/60">{m.type === "lesson" ? "Real AI colleagues write the lesson; takes about a minute." : "Available for lesson plans."}</span></span>
+          <input type="checkbox" className="mt-0.5" checked={live} onChange={(e) => setLive(e.target.checked)} />
+          <span><span className="font-semibold">Live AI agents (Google ADK)</span><br /><span className="text-sidebar-foreground/60">{m.type === "lesson" ? "Real AI colleagues write the lesson; takes about a minute." : m.type === "report" ? "Real AI colleagues write each comment; levels are still calculated exactly." : "Real AI colleagues write the moderation notes; totals are still calculated exactly."}</span></span>
         </label>
         <button type="submit" disabled={busy} className="flex w-full disabled:opacity-60 items-center justify-center gap-2 rounded-md bg-sidebar-primary px-4 py-2.5 text-sm font-semibold text-sidebar-primary-foreground shadow-lg transition hover:brightness-110">
           <Play className="h-4 w-4" /> {busy ? "AI colleagues are thinking…" : "Start mission"}

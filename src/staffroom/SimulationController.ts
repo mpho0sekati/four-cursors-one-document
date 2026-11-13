@@ -3,7 +3,7 @@ import { initialState, staffroom } from "./DocumentStore";
 import { buildMission } from "./missions";
 import { TaskScheduler } from "./TaskScheduler";
 import { LiveTranslator } from "./adk/liveTasks";
-import type { AdkStreamMsg, LessonContent } from "./adk/content";
+import { isLesson, type AdkStreamMsg, type MissionContent } from "./adk/content";
 import type { ActionType, AgentEvent, AgentId, CheckResult, EventStatus, MissionInput, Payload, Task } from "./types";
 
 class Aborted extends Error {}
@@ -41,7 +41,7 @@ export class SimulationController {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
-      let content: LessonContent | null = null;
+      let content: MissionContent | null = null;
       for (;;) {
         const { done, value } = await reader.read();
         if (done || tok !== this.token) break;
@@ -52,13 +52,15 @@ export class SimulationController {
           buf = buf.slice(nl + 1);
           if (m.type === "log") onLog(m.agent, m.text);
           else if (m.type === "error") throw new Error(m.message);
-          else if (m.type === "decision") { this.scheduler.add(tr.translate(m.agent, m.tool, m.args)); this.syncControl({}); }
+          else if (m.type === "decision") { if (input.type !== "lesson") continue; this.scheduler.add(tr.translate(m.agent, m.tool, m.args)); this.syncControl({}); }
           else content = m.content;
         }
       }
       if (tok !== this.token) return;
       if (!content) throw new Error("The agent team returned no content");
       this.lastContent = content;
+      // Report/register: the agents' finished words drive the full mission (checks run in the browser).
+      if (!isLesson(content)) { this.start(input, content); return; }
       this.scheduler.add(tr.finish());
       this.syncControl({});
     } finally {
@@ -67,8 +69,8 @@ export class SimulationController {
   }
 
   private live = false;
-  private lastContent: LessonContent | undefined;
-  start(input: MissionInput, content?: LessonContent) {
+  private lastContent: MissionContent | undefined;
+  start(input: MissionInput, content?: MissionContent) {
     this.token++;
     this.live = false;
     const tok = this.token;
