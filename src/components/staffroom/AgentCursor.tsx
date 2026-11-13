@@ -1,16 +1,17 @@
 import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, useVelocity } from "motion/react";
-import { BoxSelect, ScanSearch, TextCursorInput, Wand2 } from "lucide-react";
+import { BoxSelect, ScanSearch, TextCursorInput, Wand2, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, type RefObject } from "react";
 import { AGENTS, AGENT_IDS } from "@/staffroom/agents";
 import type { AgentId, AgentState } from "@/staffroom/types";
 
-const OFFSETS = [0.06, 0.32, 0.62, 0.86];
-const TOOL: Record<AgentId, typeof BoxSelect> = { planner: BoxSelect, writer: TextCursorInput, reviewer: ScanSearch, corrector: Wand2 };
+const OFFSETS = [0.06, 0.28, 0.5, 0.72, 0.92];
+const TOOL: Record<AgentId, typeof BoxSelect> = { planner: BoxSelect, writer: TextCursorInput, reviewer: ScanSearch, corrector: Wand2, verifier: ShieldCheck };
 const TOOL_ACTIVE: Record<AgentId, string[]> = {
   planner: ["create_section", "populate_table", "generate_document"],
   writer: ["type_text", "populate_table"],
   reviewer: ["validate_field", "flag_issue", "approve_field"],
   corrector: ["correct_field"],
+  verifier: ["validate_field", "flag_issue", "approve_field"],
 };
 
 function computeTarget(a: AgentState, c: HTMLElement, regroup: number | null, index: number, reduce: boolean) {

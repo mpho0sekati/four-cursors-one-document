@@ -74,6 +74,7 @@
   --color-writer: var(--writer);
   --color-reviewer: var(--reviewer);
   --color-corrector: var(--corrector);
+  --color-verifier: var(--verifier);
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-doc: "Newsreader", Georgia, serif;
@@ -105,6 +106,7 @@
   --writer: oklch(0.6 0.15 155);
   --reviewer: oklch(0.7 0.17 55);
   --corrector: oklch(0.55 0.22 300);
+  --verifier: oklch(0.58 0.12 195);
   --row-flash: oklch(0.6 0.15 155 / 0.18);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -126,6 +128,7 @@
   --writer: oklch(0.7 0.15 155);
   --reviewer: oklch(0.75 0.16 55);
   --corrector: oklch(0.68 0.2 300);
+  --verifier: oklch(0.72 0.12 195);
   --row-flash: oklch(0.7 0.15 155 / 0.2);
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);

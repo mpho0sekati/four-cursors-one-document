@@ -31,6 +31,10 @@ const T = (agentId: AgentId, action: Task["action"], targetId: string, label: st
 const field = (id: string, label: string, kind: Field["kind"], columns: Column[] = [], placeholder?: string): Field => ({
   id, label, kind, columns, status: "empty", text: "", rows: [], issues: [], activeAgent: null, placeholder,
 });
+// Final-case Verifier: audits the finished document against the original mission input.
+const audit = (fid: string, label: string, check: (s: StaffroomState) => CheckResult, deps: string[] = []) =>
+  T("verifier", "validate_field", fid, label, { afterAll: true, deps, duration: 700, payload: { check, keepStatus: true, bubble: "Auditing" } });
+const auditChain = (list: Task[]) => { list.forEach((t, k) => k && t.deps.push(list[k - 1]!.id)); return list; };
 const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 
 function headerTask(fid: string, i: MissionInput, extra: [string, string][], deps: string[]) {
@@ -142,8 +146,24 @@ function lessonMission(i: MissionInput) {
     }),
     T("reviewer", "validate_field", p.notes.id, "Checking notes", { deps: [w5.id], duration: 500, payload: { check: textCheck(p.notes.id, 2, "Notes") } }),
   ];
-  const gen = T("planner", "generate_document", p.header.id, "Compiling lesson plan", { afterAll: true, duration: 600, payload: { status: "provisional", bubble: "Compiling" } });
-  return { title: "Lesson Plan", tasks: [...creates, w1, w2, w3, p7, w4, w5, ...reviews, gen] };
+  const audits = auditChain([
+    audit(p.header.id, "Audit: details match mission", (s) => {
+      const v = Object.fromEntries(s.fields[p.header.id]!.rows.map((r) => [r.cells.k, r.cells.v]));
+      const bad = [["Teacher", i.teacher], ["Grade", i.grade], ["Subject", i.subject], ["Topic", i.topic]].filter(([k, want]) => (v[k!] ?? "") !== want).map(([k]) => k);
+      return bad.length ? { ok: false, issue: `Details differ from mission: ${bad.join(", ")}` } : { ok: true, summary: "Details match the mission" };
+    }),
+    audit(p.act.id, "Audit: timings vs requested duration", (s) => {
+      const tot = s.fields[p.act.id]!.rows.reduce((a, r) => a + (Number(r.cells.minutes) || 0), 0);
+      return tot === i.duration ? { ok: true, summary: `Consistent: ${tot} / ${i.duration} min` } : { ok: false, issue: `Loop inconsistent: ${tot} min planned, ${i.duration} requested` };
+    }),
+    audit(p.learn.id, "Audit: every learner paired", (s) => {
+      const names = new Set(s.fields[p.learn.id]!.rows.map((r) => r.cells.name));
+      const missing = parsed.filter((x) => !names.has(x.name)).map((x) => x.name);
+      return missing.length ? { ok: false, issue: `Missing from pairs: ${missing.join(", ")}` } : { ok: true, summary: `All ${parsed.length} learners accounted for` };
+    }),
+  ]);
+  const gen = T("planner", "generate_document", p.header.id, "Compiling lesson plan", { deps: [audits.at(-1)!.id], afterAll: true, duration: 600, payload: { status: "provisional", bubble: "Compiling" } });
+  return { title: "Lesson Plan", tasks: [...creates, w1, w2, w3, p7, w4, w5, ...reviews, ...audits, gen] };
 }
 
 // ---------------- Progress report ----------------
@@ -212,8 +232,16 @@ function reportMission(i: MissionInput) {
       },
     },
   });
-  const gen = T("planner", "generate_document", header.id, "Compiling report", { afterAll: true, deps: [sum.id], duration: 600, payload: { status: "provisional" } });
-  return { title: "Learner Progress Report", tasks: [...creates, w1, T("reviewer", "validate_field", header.id, "Checking details", { deps: [w1.id], duration: 500, payload: { check: headerCheck(header.id) } }), ...tasks, sum, gen] };
+  const audits = auditChain([
+    audit(table.id, "Audit: all learners & levels on scale", (s) => {
+      const rows = s.fields[table.id]!.rows;
+      const off = rows.filter((r) => r.cells.pct !== "" && Number(r.cells.level) !== levelFromPercent(Number(r.cells.pct))).map((r) => r.cells.name);
+      if (rows.length !== people.length) return { ok: false, issue: `${people.length - rows.length} learner(s) missing from report` };
+      return off.length ? { ok: false, issue: `Levels still off-scale: ${off.join(", ")}` } : { ok: true, summary: `All ${rows.length} learners consistent with CAPS scale` };
+    }, [sum.id]),
+  ]);
+  const gen = T("planner", "generate_document", header.id, "Compiling report", { afterAll: true, deps: [audits.at(-1)!.id], duration: 600, payload: { status: "provisional" } });
+  return { title: "Learner Progress Report", tasks: [...creates, w1, T("reviewer", "validate_field", header.id, "Checking details", { deps: [w1.id], duration: 500, payload: { check: headerCheck(header.id) } }), ...tasks, sum, ...audits, gen] };
 }
 
 // ---------------- Assessment register ----------------
@@ -286,8 +314,16 @@ function registerMission(i: MissionInput) {
       },
     },
   });
-  const gen = T("planner", "generate_document", header.id, "Compiling provisional register", { afterAll: true, deps: [sum.id], duration: 600, payload: { status: "provisional" } });
-  return { title: "Assessment Register", tasks: [...creates, w1, T("reviewer", "validate_field", header.id, "Checking details", { deps: [w1.id], duration: 500, payload: { check: headerCheck(header.id) } }), ...tasks, sum, gen] };
+  const audits = auditChain([
+    audit(sheet.id, "Audit: every learner captured", (s) => {
+      const rows = s.fields[sheet.id]!.rows;
+      const unresolved = rows.filter((r) => r.status === "warning").map((r) => r.cells.name);
+      if (rows.length !== rowsIn.length) return { ok: false, issue: `${rowsIn.length - rows.length} learner(s) missing from register` };
+      return unresolved.length ? { ok: false, issue: `Unresolved: ${unresolved.join(", ")}` } : { ok: true, summary: `All ${rows.length} learners captured; issues handled` };
+    }, [sum.id]),
+  ]);
+  const gen = T("planner", "generate_document", header.id, "Compiling provisional register", { afterAll: true, deps: [audits.at(-1)!.id], duration: 600, payload: { status: "provisional" } });
+  return { title: "Assessment Register", tasks: [...creates, w1, T("reviewer", "validate_field", header.id, "Checking details", { deps: [w1.id], duration: 500, payload: { check: headerCheck(header.id) } }), ...tasks, sum, ...audits, gen] };
 }
 
 export function buildMission(i: MissionInput): { title: string; tasks: Task[] } {

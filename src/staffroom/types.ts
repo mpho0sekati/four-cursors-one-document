@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Generic event contract. A future real-agent backend (ADK, CrewAI) can emit the
 // same AgentEvent objects; the renderer only consumes these events.
-export type AgentId = "planner" | "writer" | "reviewer" | "corrector";
+export type AgentId = "planner" | "writer" | "reviewer" | "corrector" | "verifier";
 export type ActorId = AgentId | "teacher";
 
 export type ActionType =

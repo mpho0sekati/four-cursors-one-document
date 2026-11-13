@@ -1,13 +1,13 @@
 # AI Staffroom
 
-A frontend demonstration of a swarm-style document workspace for teachers. Four simulated AI colleagues — **Planner**, **Writer**, **Reviewer** and **Corrector** — appear as animated cursors that move to real fields on an A4 page and build a lesson plan, progress report or mark register live.
+A frontend demonstration of a swarm-style document workspace for teachers. Five simulated AI colleagues — **Planner**, **Writer**, **Reviewer**, **Corrector** and a final **Verifier** that audits the finished document against the mission — appear as animated cursors that move to real fields on an A4 page and build a lesson plan, progress report or mark register live.
 
 > All colleagues are simulated in the browser. No real AI backend is called. Sample school, teacher and learner data is fictional.
 
 ## Features
 
 - **Three-panel layout:** Mission Desk (inputs), Living Document (A4 canvas), Agent Control Panel (status, log, controls).
-- **Four animated cursors** with spring motion, velocity tilt and tool badges (crosshair, I-beam, scanner, correction wand).
+- **Five animated cursors** with spring motion, velocity tilt and tool badges (crosshair, I-beam, scanner, correction wand, verifier shield).
 - **Real document state:** progressive typing, table rows inserted one by one, statuses (editing → checking → warning → corrected → approved).
 - **Genuine validation:** the Reviewer runs real checks (e.g. activity minutes vs. lesson duration, mark totals, level scales) and the Corrector applies justified fixes.
 - **Blueprint previews**, alignment guides and a completion regroup animation around the document seal.
@@ -42,7 +42,7 @@ src/
     MissionDesk.tsx           Mission inputs form
     DocumentCanvas.tsx        A4 living document (fields carry data-field-id)
     AgentActivityPanel.tsx    Agent cards, event log, controls
-    CursorLayer.tsx           Overlay hosting the four cursors
+    CursorLayer.tsx           Overlay hosting the five cursors
     AgentCursor.tsx           Spring/tilt cursor + tool badges
     Blueprint.tsx             Wireframe preview while Planner creates a section
   staffroom/

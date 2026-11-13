@@ -15,7 +15,7 @@ export class SimulationController {
   private token = 0;
   private paused = false;
   private speed: 1 | 2 | 3 = 1;
-  private busy: Record<AgentId, boolean> = { planner: false, writer: false, reviewer: false, corrector: false };
+  private busy: Record<AgentId, boolean> = { planner: false, writer: false, reviewer: false, corrector: false, verifier: false };
   private evt = 0;
   lastInput: MissionInput | null = null;
 
