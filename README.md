@@ -60,4 +60,4 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the engine works and ho
 
 ## Live AI agents (Google ADK)
 
-Tick **Live AI agents (Google ADK)** in the Mission Desk for a lesson plan. A real five-agent ADK team (`SequentialAgent` of Planner → Writer → Reviewer → Corrector → Verifier `LlmAgent`s sharing one draft via tools) writes the lesson on the server (`/api/adk-mission`, streamed as NDJSON), then the cursors play out the result and the deterministic checks run as usual. Learner names are not sent to the AI.
+Tick **Live AI agents (Google ADK)** in the Mission Desk for a lesson plan. A real five-agent ADK team (`SequentialAgent` of Planner → Writer → Reviewer → Corrector → Verifier `LlmAgent`s sharing one draft via tools) writes the lesson on the server (`/api/adk-mission`, streamed as NDJSON), and every real tool call the agents make (outline, writing, timing checks, flagged issues, fixes, final audit) is streamed live and drives the cursors as it happens. Learner names are not sent to the AI.

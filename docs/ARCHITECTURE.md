@@ -39,3 +39,7 @@ Actions: `navigate_to_field`, `focus_field`, `create_section`, `type_text`, `pop
 1. Add the type to `MissionType` in `types.ts`.
 2. Add a builder in `missions.ts` returning `{ title, tasks }` (Planner `create_section` tasks first, then Writer, Reviewer `validate_field`, and a final `afterAll` `generate_document`).
 3. Put check logic in `validation.ts` and cover it in `validation.test.ts`.
+
+## Live ADK mode
+
+`/api/adk-mission` runs the Google ADK team (`src/staffroom/adk/team.server.ts`) and streams NDJSON. Each `decision` message (agent, tool, args) is mapped by `LiveTranslator` (`adk/liveTasks.ts`) into chained Tasks added to the scheduler while it runs, so cursors show the agents' actual choices in order. `SimulationController.startLive` keeps the loop open until the stream ends.

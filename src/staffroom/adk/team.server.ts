@@ -15,7 +15,7 @@ export async function runLessonTeam(input: MissionInput, send: (m: AdkStreamMsg)
   };
   const log = (agent: string, text: string) => send({ type: "log", agent, text });
   const tool = (agent: string, name: string, description: string, parameters: any, run: (a: any) => unknown) =>
-    new FunctionTool({ name, description, parameters, execute: (a: any) => { const r = run(a); log(agent, `${name} → ${JSON.stringify(r).slice(0, 140)}`); return r; } });
+    new FunctionTool({ name, description, parameters, execute: (a: any) => { const r = run(a); send({ type: "decision", agent, tool: name, args: a ?? {}, result: r }); log(agent, `${name} → ${JSON.stringify(r).slice(0, 140)}`); return r; } });
   const model = new GatewayLlm() as any;
   const mission = `Grade ${input.grade} ${input.subject} lesson on "${input.topic}", exactly ${input.duration} minutes, for South African learners (CAPS). Teacher request: ${input.instructions || "none"}.`;
   const view = () => ({ outline: draft.outline, objectives: draft.objectives, activities: draft.activities, assessment: draft.assessment, notes: draft.notes, issues: draft.issues });
@@ -43,12 +43,12 @@ export async function runLessonTeam(input: MissionInput, send: (m: AdkStreamMsg)
     tools: [
       readDoc("reviewer"),
       tool("reviewer", "check_timings", "Deterministically sum activity minutes against the lesson duration.", z.object({}), () => checkLessonDuration(draft.activities.map((r) => r.minutes), input.duration)),
-      tool("reviewer", "flag_issue", "Flag a problem for the Corrector.", z.object({ issue: z.string() }), (a) => { draft.issues.push(a.issue); return { ok: true }; }),
+      tool("reviewer", "flag_issue", "Flag a problem for the Corrector.", z.object({ section: z.enum(["objectives", "activities", "assessment", "notes"]), issue: z.string() }), (a) => { draft.issues.push(`${a.section}: ${a.issue}`); return { ok: true }; }),
     ],
   });
   const corrector = new LlmAgent({
     name: "corrector", model, description: "Fixes flagged issues",
-    instruction: `You are the Corrector. Mission: ${mission} Call read_document. For each issue in "issues", rewrite the affected section with the matching write_ tool so the issue is resolved; activity minutes must total exactly ${input.duration}. If there are no issues, change nothing. Then reply "done".`,
+    instruction: `You are the Corrector. Mission: ${mission} Call read_document. For each issue in "issues", rewrite the affected section with the matching write_ tool so the issue is resolved; activity minutes must total exactly ${input.duration} and keep the same number of activity rows. If there are no issues, change nothing. Then reply "done".`,
     tools: [
       readDoc("corrector"),
       tool("corrector", "write_activities", "Replace the activity table.", z.object({ rows: z.array(z.object({ phase: z.string(), activity: z.string(), minutes: z.number() })) }), (a) => { draft.activities = a.rows; return { ok: true }; }),

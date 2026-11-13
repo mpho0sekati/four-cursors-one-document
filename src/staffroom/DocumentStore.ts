@@ -107,6 +107,7 @@ export function applyEvent(s: StaffroomState, e: AgentEvent): StaffroomState {
         if (done) {
           if (p.note) f.note = p.note;
           if (p.issue) f.issues = f.issues.filter((i) => i !== p.issue);
+          if (p.clearIssues) { f.issues = []; f.rows = f.rows.map((r) => (r.status === "warning" ? { ...r, status: "corrected" } : r)); }
           if (!f.rows.some((r) => r.status === "warning")) f.status = "corrected";
         }
       }
